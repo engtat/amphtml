@@ -34,6 +34,10 @@ import {
   resetSraStateForTesting,
 } from '../amp-ad-network-doubleclick-impl';
 import {
+  DOUBLECLICK_A4A_EXPERIMENT_NAME,
+  DOUBLECLICK_EXPERIMENT_FEATURE,
+} from '../doubleclick-a4a-config';
+import {
   MANUAL_EXPERIMENT_ID,
 } from '../../../../ads/google/a4a/traffic-experiments';
 import {EXPERIMENT_ATTRIBUTE} from '../../../../ads/google/a4a/utils';
@@ -42,7 +46,10 @@ import {utf8Encode} from '../../../../src/utils/bytes';
 import {ampdocServiceFor} from '../../../../src/ampdoc';
 import {BaseElement} from '../../../../src/base-element';
 import {createElementWithAttributes} from '../../../../src/dom';
-import {toggleExperiment} from '../../../../src/experiments';
+import {
+  toggleExperiment,
+  forceExperimentBranch,
+} from '../../../../src/experiments';
 import {layoutRectLtwh} from '../../../../src/layout-rect';
 import {installDocService} from '../../../../src/service/ampdoc-impl';
 import {Xhr, FetchResponseHeaders} from '../../../../src/service/xhr-impl';
@@ -151,68 +158,75 @@ describes.sandboxed('amp-ad-network-doubleclick-impl', {}, () => {
     });
 
     it('without signature', () => {
+      const headers = {
+        get() {
+          return undefined;
+        },
+        has() {
+          return false;
+        },
+      };
       return utf8Encode('some creative').then(creative => {
-        return impl.extractCreativeAndSignature(
-          creative,
-          {
-            get: function() { return undefined; },
-            has: function() { return false; },
-          }).then(adResponse => {
-            expect(adResponse).to.deep.equal(
-                  {creative, signature: null, size});
-            expect(loadExtensionSpy.withArgs('amp-analytics')).to.not.be.called;
-
-          });
+        return impl.extractCreativeAndSignature(creative, headers)
+            .then(adResponse => {
+              expect(adResponse).to.deep.equal({creative, signature: null});
+              expect(impl.extractSize(headers)).to.deep.equal(size);
+              expect(loadExtensionSpy.withArgs('amp-analytics'))
+                  .to.not.be.called;
+            });
       });
     });
     it('with signature', () => {
       return utf8Encode('some creative').then(creative => {
-        return impl.extractCreativeAndSignature(
-          creative,
-          {
-            get: function(name) {
-              return name == 'X-AmpAdSignature' ? 'AQAB' : undefined;
-            },
-            has: function(name) {
-              return name === 'X-AmpAdSignature';
-            },
-          }).then(adResponse => {
-            expect(adResponse).to.deep.equal(
-              {creative, signature: base64UrlDecodeToBytes('AQAB'), size});
-            expect(loadExtensionSpy.withArgs('amp-analytics')).to.not.be.called;
-          });
+        const headers = {
+          get(name) {
+            return name == 'X-AmpAdSignature' ? 'AQAB' : undefined;
+          },
+          has(name) {
+            return name === 'X-AmpAdSignature';
+          },
+        };
+        return impl.extractCreativeAndSignature(creative, headers)
+            .then(adResponse => {
+              expect(adResponse).to.deep.equal({
+                creative,
+                signature: base64UrlDecodeToBytes('AQAB'),
+              });
+              expect(impl.extractSize(headers)).to.deep.equal(size);
+              expect(loadExtensionSpy.withArgs('amp-analytics'))
+                  .to.not.be.called;
+            });
       });
     });
     it('with analytics', () => {
       return utf8Encode('some creative').then(creative => {
         const url = ['https://foo.com?a=b', 'https://blah.com?lsk=sdk&sld=vj'];
-        return impl.extractCreativeAndSignature(
-          creative,
-          {
-            get: function(name) {
-              switch (name) {
-                case 'X-AmpAnalytics':
-                  return JSON.stringify({url});
-                case 'X-AmpAdSignature':
-                  return 'AQAB';
-                default:
-                  return undefined;
-              }
-            },
-            has: function(name) {
-              return !!this.get(name);
-            },
-          }).then(adResponse => {
-            expect(adResponse).to.deep.equal(
-              {
+        const headers = {
+          get(name) {
+            switch (name) {
+              case 'X-AmpAnalytics':
+                return JSON.stringify({url});
+              case 'X-AmpAdSignature':
+                return 'AQAB';
+              default:
+                return undefined;
+            }
+          },
+          has(name) {
+            return !!this.get(name);
+          },
+        };
+        return impl.extractCreativeAndSignature(creative, headers)
+            .then(adResponse => {
+              expect(adResponse).to.deep.equal({
                 creative,
                 signature: base64UrlDecodeToBytes('AQAB'),
-                size,
               });
-            expect(loadExtensionSpy.withArgs('amp-analytics')).to.be.called;
-            // exact value of ampAnalyticsConfig covered in
-            // ads/google/test/test-utils.js
-          });
+              expect(impl.extractSize(headers)).to.deep.equal(size);
+              expect(loadExtensionSpy.withArgs('amp-analytics')).to.be.called;
+              // exact value of ampAnalyticsConfig covered in
+              // ads/google/test/test-utils.js
+            });
       });
     });
   });
@@ -239,9 +253,44 @@ describes.sandboxed('amp-ad-network-doubleclick-impl', {}, () => {
 
     it('injects amp analytics', () => {
       impl.ampAnalyticsConfig_ = {
-        'request': 'www.example.com',
-        'triggers': {
-          'on': 'visible',
+        transport: {beacon: false, xhrpost: false},
+        requests: {
+          visibility1: 'https://foo.com?hello=world',
+          visibility2: 'https://bar.com?a=b',
+        },
+        triggers: {
+          continuousVisible: {
+            on: 'visible',
+            request: ['visibility1', 'visibility2'],
+            visibilitySpec: {
+              selector: 'amp-ad',
+              selectionMethod: 'closest',
+              visiblePercentageMin: 50,
+              continuousTimeMin: 1000,
+            },
+          },
+          continuousVisibleIniLoad: {
+            on: 'ini-load',
+            selector: 'amp-ad',
+            selectionMethod: 'closest',
+          },
+          continuousVisibleRenderStart: {
+            on: 'render-start',
+            selector: 'amp-ad',
+            selectionMethod: 'closest',
+          },
+        },
+      };      // To placate assertion.
+      impl.responseHeaders_ = {
+        get: function(name) {
+          if (name == 'X-QQID') {
+            return 'qqid_string';
+          }
+        },
+        has: function(name) {
+          if (name == 'X-QQID') {
+            return true;
+          }
         },
       };
       impl.onCreativeRender(false);
@@ -389,13 +438,12 @@ describes.sandboxed('amp-ad-network-doubleclick-impl', {}, () => {
           /(\?|&)u_tz=-?[0-9]+(&|$)/,
           /(\?|&)u_his=[0-9]+(&|$)/,
           /(\?|&)oid=2(&|$)/,
-          /(\?|&)brdim=-?[0-9]+(%2C-?[0-9]+){9}(&|$)/,
           /(\?|&)isw=[0-9]+(&|$)/,
           /(\?|&)ish=[0-9]+(&|$)/,
           /(\?|&)pfx=(1|0)(&|$)/,
           /(\?|&)eid=([^&]+%2c)*108809080(%2c[^&]+)*(&|$)/,
           /(\?|&)url=https?%3A%2F%2F[a-zA-Z0-9.:%]+(&|$)/,
-          /(\?|&)top=https?%3A%2F%2Flocalhost%3A9876%2F%3Fid%3D[0-9]+(&|$)/,
+          /(\?|&)top=localhost(&|$)/,
           /(\?|&)ref=https?%3A%2F%2Flocalhost%3A9876%2F%3Fid%3D[0-9]+(&|$)/,
           /(\?|&)dtd=[0-9]+(&|$)/,
         ].forEach(regexp => expect(url).to.match(regexp));
@@ -459,6 +507,7 @@ describes.sandboxed('amp-ad-network-doubleclick-impl', {}, () => {
             width: '300',
             height: '150',
           }).then(() => {
+            impl.buildCallback();
             const slotIdBefore = impl.element.getAttribute(
                 'data-amp-slot-index');
 
@@ -508,6 +557,80 @@ describes.sandboxed('amp-ad-network-doubleclick-impl', {}, () => {
         element.setAttribute('data-slot', slotName);
         expect(getNetworkId(element)).to.equal(testValues[slotName]);
       });
+    });
+  });
+
+  describe('#SRA enabled', () => {
+    let fixture;
+
+    beforeEach(() => {
+      return createIframePromise().then(f => {
+        setupForAdTesting(f);
+        fixture = f;
+      });
+    });
+
+    it('should be disabled by default', () => {
+      const element = createElementWithAttributes(
+          fixture.doc, 'amp-ad', {
+            type: 'doubleclick',
+            height: 320,
+            width: 50,
+          });
+      fixture.doc.body.appendChild(element);
+      const impl = new AmpAdNetworkDoubleclickImpl(element);
+      expect(impl.useSra).to.be.false;
+    });
+
+    it('should be enabled if meta tag present', () => {
+      const metaElement = createElementWithAttributes(fixture.doc, 'meta', {
+        name: 'amp-ad-doubleclick-sra',
+      });
+      fixture.doc.head.appendChild(metaElement);
+      const element = createElementWithAttributes(
+          fixture.doc, 'amp-ad', {
+            type: 'doubleclick',
+            height: 320,
+            width: 50,
+          });
+      fixture.doc.body.appendChild(element);
+      const impl = new AmpAdNetworkDoubleclickImpl(element);
+      expect(impl.useSra).to.be.true;
+    });
+  });
+
+  describe('#SRA AMP creative unlayoutCallback', () => {
+    let impl;
+
+    beforeEach(() => {
+      return createIframePromise().then(f => {
+        setupForAdTesting(f);
+        const element = createElementWithAttributes(
+            f.doc, 'amp-ad', {
+              type: 'doubleclick',
+              height: 320,
+              width: 50,
+              'data-a4a-upgrade-type': 'amp-ad-network-doubleclick-impl',
+            });
+        f.doc.body.appendChild(element);
+        const iframe = createElementWithAttributes(
+            f.doc, 'iframe', {
+              src: 'https://foo.com',
+              height: 320,
+              width: 50,
+            });
+        element.appendChild(iframe);
+        impl = new AmpAdNetworkDoubleclickImpl(element);
+      });
+    });
+
+    it('should not remove if not SRA', () => {
+      expect(impl.shouldUnlayoutAmpCreatives()).to.be.false;
+    });
+
+    it('should remove if SRA and has frame', () => {
+      impl.useSra = true;
+      expect(impl.shouldUnlayoutAmpCreatives()).to.be.true;
     });
   });
 
@@ -602,7 +725,7 @@ describes.sandboxed('amp-ad-network-doubleclick-impl', {}, () => {
       element.getIntersectionChangeEntry = () => {return null;};
       doc.body.appendChild(element);
       const impl = new AmpAdNetworkDoubleclickImpl(element);
-      impl.useSra_ = true;
+      impl.useSra = true;
       return impl;
     }
 
@@ -615,17 +738,17 @@ describes.sandboxed('amp-ad-network-doubleclick-impl', {}, () => {
       headers[RENDERING_TYPE_HEADER] = XORIGIN_MODE.NAMEFRAME;
       // Assume all implementations have same data slot.
       const iuParts = encodeURIComponent(
-        validInstances[0].element.getAttribute('data-slot').split(/\//)
+          validInstances[0].element.getAttribute('data-slot').split(/\//)
         .splice(1).join());
       const xhrWithArgs = xhrMock.withArgs(
-        sinon.match(
-          new RegExp('^https:\/\/securepubads\\.g\\.doubleclick\\.net' +
+          sinon.match(
+              new RegExp('^https:\/\/securepubads\\.g\\.doubleclick\\.net' +
             `\/gampad\/ads\\?iu_parts=${iuParts}&enc_prev_ius=`)),
-        {
-          mode: 'cors',
-          method: 'GET',
-          credentials: 'include',
-        });
+          {
+            mode: 'cors',
+            method: 'GET',
+            credentials: 'include',
+          });
       if (opt_xhrFail) {
         xhrWithArgs.returns(Promise.reject(
             new TypeError('some random network error')));
@@ -661,23 +784,23 @@ describes.sandboxed('amp-ad-network-doubleclick-impl', {}, () => {
         '^https:\/\/securepubads\\.g\\.doubleclick\\.net' +
         `\/gampad\/ads\\?iu=${iu}&`);
       xhrMock.withArgs(
-        sinon.match(urlRegexp),
-        {
-          mode: 'cors',
-          method: 'GET',
-          credentials: 'include',
-        }).returns(Promise.resolve({
-          arrayBuffer: () => utf8Encode(creative),
-          bodyUsed: false,
-          headers: new FetchResponseHeaders({
-            getResponseHeader(name) {
-              return headers[name];
+          sinon.match(urlRegexp),
+          {
+            mode: 'cors',
+            method: 'GET',
+            credentials: 'include',
+          }).returns(Promise.resolve({
+            arrayBuffer: () => utf8Encode(creative),
+            bodyUsed: false,
+            headers: new FetchResponseHeaders({
+              getResponseHeader(name) {
+                return headers[name];
+              },
+            }),
+            text: () => {
+              throw new Error('should not be SRA!');
             },
-          }),
-          text: () => {
-            throw new Error('should not be SRA!');
-          },
-        }));
+          }));
     }
 
     /**
@@ -711,8 +834,8 @@ describes.sandboxed('amp-ad-network-doubleclick-impl', {}, () => {
           for (let i = 0; i < instanceCount; i++) {
             const impl = createA4aSraInstance(network.networkId);
             doubleclickInstances.push(impl);
+            sandbox.stub(impl, 'isValidElement').returns(!invalid);
             if (invalid) {
-              sandbox.stub(impl, 'isValidElement').returns(false);
               impl.element.setAttribute('data-test-invalid', 'true');
             }
           }
@@ -729,12 +852,12 @@ describes.sandboxed('amp-ad-network-doubleclick-impl', {}, () => {
       doubleclickInstances.forEach(impl => {
         const networkId = getNetworkId(impl.element);
         (grouping[networkId] || (grouping[networkId] = []))
-          .push(impl);
+            .push(impl);
         (groupingPromises[networkId] || (groupingPromises[networkId] = []))
-          .push(Promise.resolve(impl));
+            .push(Promise.resolve(impl));
       });
       sandbox.stub(AmpAdNetworkDoubleclickImpl.prototype, 'groupSlotsForSra')
-        .returns(Promise.resolve(groupingPromises));
+          .returns(Promise.resolve(groupingPromises));
       let idx = 0;
       const layoutCallbacks = [];
       const getLayoutCallback = (impl, creative, isSra, noRender) => {
@@ -750,7 +873,7 @@ describes.sandboxed('amp-ad-network-doubleclick-impl', {}, () => {
           if (isSra) {
             // Expect safeframe.
             expect(name).to.match(
-              new RegExp(`^\\d+-\\d+-\\d+;\\d+;${creative}`));
+                new RegExp(`^\\d+-\\d+-\\d+;\\d+;${creative}`));
           } else {
             // Expect nameframe render.
             expect(JSON.parse(name).creative).to.equal(creative);
@@ -770,13 +893,13 @@ describes.sandboxed('amp-ad-network-doubleclick-impl', {}, () => {
             generateNonSraXhrMockCall(impl, creative);
           }
           layoutCallbacks.push(getLayoutCallback(
-            impl, creative, isSra,
-            networkXhrFailure[networkId] ||
+              impl, creative, isSra,
+              networkXhrFailure[networkId] ||
             impl.element.getAttribute('data-test-invalid') == 'true'));
         });
         if (isSra) {
           generateSraXhrMockCall(validInstances, networkId, sraResponses,
-            networkXhrFailure[networkId], networkValidity[networkId]);
+              networkXhrFailure[networkId], networkValidity[networkId]);
         }
       });
       return Promise.all(layoutCallbacks).then(() => expect(
@@ -792,13 +915,13 @@ describes.sandboxed('amp-ad-network-doubleclick-impl', {}, () => {
         sandbox.stub(AmpA4A.prototype,
             'getSigningServiceNames').returns(['google']);
         xhrMockJson.withArgs(
-          'https://cdn.ampproject.org/amp-ad-verifying-keyset.json',
-          {
-            mode: 'cors',
-            method: 'GET',
-            ampCors: false,
-            credentials: 'omit',
-          }).returns(
+            'https://cdn.ampproject.org/amp-ad-verifying-keyset.json',
+            {
+              mode: 'cors',
+              method: 'GET',
+              ampCors: false,
+              credentials: 'omit',
+            }).returns(
             Promise.resolve({keys: []}));
         // TODO(keithwrightbos): remove, currently necessary as amp-ad
         // attachment causes 3p impl to load causing errors to be thrown.
@@ -813,13 +936,13 @@ describes.sandboxed('amp-ad-network-doubleclick-impl', {}, () => {
     it('should not use SRA if single slot', () => executeTest([1234]));
 
     it('should not use SRA if single slot, multiple networks',
-      () => executeTest([1234, 4567]));
+        () => executeTest([1234, 4567]));
 
     it('should correctly use SRA for multiple slots',
-      () => executeTest([1234, 1234]));
+        () => executeTest([1234, 1234]));
 
     it('should not send SRA request if slots are invalid',
-      () => executeTest([{networkId: 1234, invalidInstances: 2}]));
+        () => executeTest([{networkId: 1234, invalidInstances: 2}]));
 
     it('should send SRA request if more than 1 slot is valid', () =>
       executeTest([{networkId: 1234, instances: 2, invalidInstances: 2}]));
@@ -828,16 +951,39 @@ describes.sandboxed('amp-ad-network-doubleclick-impl', {}, () => {
       executeTest([{networkId: 1234, instances: 1, invalidInstances: 2}]));
 
     it('should handle xhr failure by not sending subsequent request',
-      () => executeTest([{networkId: 1234, instances: 2, xhrFail: true}]));
+        () => executeTest([{networkId: 1234, instances: 2, xhrFail: true}]));
 
     it('should handle mixture of xhr and non xhr failures', () => executeTest(
         [{networkId: 1234, instances: 2, xhrFail: true}, 4567, 4567]));
 
     it('should correctly use SRA for multiple slots. multiple networks',
-      () => executeTest([1234, 4567, 1234, 4567]));
+        () => executeTest([1234, 4567, 1234, 4567]));
 
     it('should handle mixture of all possible scenarios', () => executeTest(
-      [1234, 1234, 101, {networkId: 4567, instances: 2, xhrFail: true}, 202,
+        [1234, 1234, 101, {networkId: 4567, instances: 2, xhrFail: true}, 202,
         {networkId: 8901, instances: 3, invalidInstances: 1}]));
+  });
+
+  describe('#delayAdRequestEnabled', () => {
+    let impl;
+    beforeEach(() => {
+      return createIframePromise().then(f => {
+        setupForAdTesting(f);
+        impl = new AmpAdNetworkDoubleclickImpl(
+          createElementWithAttributes(f.doc, 'amp-ad', {
+            type: 'doubleclick',
+          }));
+      });
+    });
+
+    it('should return true if in experiment', () => {
+      forceExperimentBranch(impl.win, DOUBLECLICK_A4A_EXPERIMENT_NAME,
+          DOUBLECLICK_EXPERIMENT_FEATURE.DELAYED_REQUEST);
+      expect(impl.delayAdRequestEnabled()).to.be.true;
+    });
+
+    it('should return false if not in experiment', () => {
+      expect(impl.delayAdRequestEnabled()).to.be.false;
+    });
   });
 });

@@ -20,6 +20,7 @@ import {dev, user} from '../../../src/log';
 import {getMode} from '../../../src/mode';
 import {resolveRelativeUrl} from '../../../src/url';
 import {utf8Decode} from '../../../src/utils/bytes';
+import {parseJson} from '../../../src/json';
 
 
 export class AmpAdNetworkFakeImpl extends AmpA4A {
@@ -29,10 +30,15 @@ export class AmpAdNetworkFakeImpl extends AmpA4A {
    */
   constructor(element) {
     super(element);
-    user().assert(element.hasAttribute('src'),
-        'Attribute src required for <amp-ad type="fake">: %s', element);
     user().assert(TextEncoder, '<amp-ad type="fake"> requires browser'
         + ' support for TextEncoder() function.');
+  }
+
+  /** @override */
+  buildCallback() {
+    user().assert(this.element.hasAttribute('src'),
+        'Attribute src required for <amp-ad type="fake">: %s', this.element);
+    super.buildCallback();
   }
 
   /** @override */
@@ -69,7 +75,7 @@ export class AmpAdNetworkFakeImpl extends AmpA4A {
       }
       // Normal mode: the content is a JSON structure with two fieleds:
       // `creative` and `signature`.
-      const decoded = JSON.parse(deserialized);
+      const decoded = parseJson(deserialized);
       dev().info('AMP-AD-FAKE', 'Decoded response text =', decoded['creative']);
       dev().info('AMP-AD-FAKE', 'Decoded signature =', decoded['signature']);
       const encoder = new TextEncoder('utf-8');

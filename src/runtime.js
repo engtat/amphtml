@@ -69,9 +69,9 @@ import {installStorageServiceForDoc} from './service/storage-impl';
 import {installStyles} from './style-installer';
 import {installTimerService} from './service/timer-impl';
 import {installTemplatesService} from './service/template-impl';
-import {installUrlReplacementsServiceForDoc,} from
+import {installUrlReplacementsServiceForDoc} from
     './service/url-replacements-impl';
-import {installViewerServiceForDoc, setViewerVisibilityState,} from
+import {installViewerServiceForDoc, setViewerVisibilityState} from
     './service/viewer-impl';
 import {installViewportServiceForDoc} from './service/viewport-impl';
 import {installVsyncService} from './service/vsync-impl';
@@ -96,21 +96,6 @@ import * as config from './config';
 initLogConstructor();
 setReportError(reportError);
 
-/**
- * - n is the name.
- * - f is the function body of the extension.
- * - p is the priority. Only supported value is "high".
- *   high means, that the extension is not subject to chunking.
- *   This should be used for work, that should always happen
- *   as early as possible. Currently this is primarily used
- *   for viewer communication setup.
- * @typedef {{
- *   n: string,
- *   f: function(!Object),
- *   p: (string|undefined),
- * }}
- */
-let ExtensionPayloadDef;
 
 /** @const @private {string} */
 const TAG = 'runtime';
@@ -189,7 +174,7 @@ function adoptShared(global, opts, callback) {
   global.AMP_TAG = true;
   // If there is already a global AMP object we assume it is an array
   // of functions
-  /** @const {!Array<function(!Object)|ExtensionPayloadDef>} */
+  /** @const {!Array<function(!Object)|ExtensionPayload>} */
   const preregisteredExtensions = global.AMP || [];
 
   installExtensionsService(global);
@@ -266,18 +251,18 @@ function adoptShared(global, opts, callback) {
 
   /**
    * Sets the function to forward tick events to.
-   * @param {function(string,?string=,number=)} fn
+   * @param {function(string,?string=,number=)} unusedFn
    * @param {function()=} opt_flush
    * @deprecated
    * @export
    */
-  global.AMP.setTickFunction = (fn, opt_flush) => {};
+  global.AMP.setTickFunction = (unusedFn, opt_flush) => {};
 
   // Run specific setup for a single-doc or shadow-doc mode.
   callback(global, extensions);
 
   /**
-   * @param {function(!Object)|ExtensionPayloadDef} fnOrStruct
+   * @param {function(!Object)|ExtensionPayload} fnOrStruct
    */
   function installExtension(fnOrStruct) {
     const register = () => {
@@ -340,7 +325,7 @@ function adoptShared(global, opts, callback) {
   maybePumpEarlyFrame(global, () => {
     /**
      * Registers a new custom element.
-     * @param {function(!Object)|ExtensionPayloadDef} fnOrStruct
+     * @param {function(!Object)|ExtensionPayload} fnOrStruct
      */
     global.AMP.push = function(fnOrStruct) {
       if (maybeLoadCorrectVersion(global, fnOrStruct)) {
@@ -371,7 +356,7 @@ function adoptShared(global, opts, callback) {
   // immediately we need to keep pushing onto preregisteredExtensions
   if (!global.AMP.push) {
     global.AMP.push = preregisteredExtensions.push.bind(
-      preregisteredExtensions);
+        preregisteredExtensions);
   }
 
   installAutoLoadExtensions();
@@ -575,9 +560,9 @@ function registerServiceForDoc(ampdoc, name, opt_ctor, opt_factory) {
   // TODO(kmh287): Investigate removing the opt_instantiate arg after
   // all other services have been refactored.
   registerServiceBuilderForDoc(ampdoc,
-                               name,
-                               ctor,
-                               /* opt_instantiate */ true);
+      name,
+      ctor,
+      /* opt_instantiate */ true);
 }
 
 
@@ -656,7 +641,7 @@ class MultidocManager {
     /**
      * Posts message to the ampdoc.
      * @param {string} eventType
-     * @param {!JSONType} data
+     * @param {!JsonObject} data
      * @param {boolean} unusedAwaitResponse
      * @return {(!Promise<*>|undefined)}
      */
@@ -948,7 +933,7 @@ class MultidocManager {
       const viewer = viewerForDoc(shadowRoot.AMP.ampdoc);
       this.timer_.delay(() => {
         viewer.receiveMessage('broadcast',
-            /** @type {!JSONType} */ (data),
+            /** @type {!JsonObject} */ (data),
             /* awaitResponse */ false);
       }, 0);
     });
@@ -1061,7 +1046,7 @@ export function registerElementForTesting(win, elementName) {
  * to have the same AMP release version.
  *
  * @param {!Window} win
- * @param {function(!Object)|ExtensionPayloadDef} fnOrStruct
+ * @param {function(!Object)|ExtensionPayload} fnOrStruct
  * @return {boolean}
  */
 function maybeLoadCorrectVersion(win, fnOrStruct) {
@@ -1081,7 +1066,7 @@ function maybeLoadCorrectVersion(win, fnOrStruct) {
   // The :not is an extra prevention of recursion because it will be
   // added to script tags that go into the code path below.
   const scriptInHead = win.document.head./*OK*/querySelector(
-          `[custom-element="${fnOrStruct.n}"]:not([i-amphtml-inserted])`);
+      `[custom-element="${fnOrStruct.n}"]:not([i-amphtml-inserted])`);
   dev().assert(scriptInHead, 'Expected to find script for extension: %s',
       fnOrStruct.n);
   if (!scriptInHead) {

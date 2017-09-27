@@ -50,7 +50,7 @@ var extensionAliasFilePath = {};
 declareExtension('amp-3q-player', '0.1', false, 'NO_TYPE_CHECK');
 declareExtension('amp-access', '0.1', true, 'NO_TYPE_CHECK');
 declareExtension('amp-access-laterpay', '0.1', true, 'NO_TYPE_CHECK');
-declareExtension('amp-accordion', '0.1', true);
+declareExtension('amp-accordion', '0.1', false);
 declareExtension('amp-ad', '0.1', true);
 declareExtension('amp-ad-network-adsense-impl', 0.1, false);
 declareExtension('amp-ad-network-doubleclick-impl', 0.1, false);
@@ -739,6 +739,12 @@ function appendToCompiledFile(srcFilename, destFilePath) {
 function compileJs(srcDir, srcFilename, destDir, options) {
   options = options || {};
   if (options.minify) {
+    if (argv.minimal_set
+        && !(/integration|babel|amp-ad|lightbox|sidebar|analytics|app-banner/
+            .test(srcFilename))) {
+      logBuildStep('Skipping because of --minimal_set', srcFilename);
+      return Promise.resolve();
+    }
     logBuildStep('Minifying', srcFilename);
     return closureCompile(
         srcDir + srcFilename, destDir, options.minifiedName, options)
@@ -1081,6 +1087,7 @@ gulp.task('dist', 'Build production binaries', dist, {
     pseudo_names: 'Compiles with readable names. ' +
         'Great for profiling and debugging production code.',
     fortesting: 'Compiles with `getMode().test` set to true',
+    minimal_set: 'Only compile files needed to load article.amp.html',
   }
 });
 gulp.task('extensions', 'Build AMP Extensions', buildExtensions);

@@ -41,12 +41,12 @@ export class AmpAdCustom extends AMP.BaseElement {
   /** @param {!AmpElement} element */
   constructor(element) {
     super(element);
-    /** @private {string} The base URL of the ad server for this ad */
-    this.url_ = element.getAttribute('data-url');
+    /** @private {?string} The base URL of the ad server for this ad */
+    this.url_ = null;
 
-    /** @private {string} A string identifying this ad slot: the server's
+    /** @private {?string} A string identifying this ad slot: the server's
      *  responses will be keyed by slot */
-    this.slot_ = element.getAttribute('data-slot');
+    this.slot_ = null;
 
     /** {?AmpAdUIHandler} */
     this.uiHandler = null;
@@ -66,6 +66,8 @@ export class AmpAdCustom extends AMP.BaseElement {
   }
 
   buildCallback() {
+    this.url_ = this.element.getAttribute('data-url');
+    this.slot_ = this.element.getAttribute('data-slot');
     // Ensure that there are templates in this ad
     const templates = this.element.querySelectorAll('template');
     user().assert(templates.length > 0, 'Missing template in custom ad');
@@ -98,12 +100,12 @@ export class AmpAdCustom extends AMP.BaseElement {
       if (templateData !== null && typeof templateData == 'object') {
         this.renderStarted();
         templatesFor(this.win).findAndRenderTemplate(element, templateData)
-          .then(renderedElement => {
+            .then(renderedElement => {
           // Get here when the template has been rendered
           // Clear out the template and replace it by the rendered version
-            removeChildren(element);
-            element.appendChild(renderedElement);
-          });
+              removeChildren(element);
+              element.appendChild(renderedElement);
+            });
       } else {
         this.uiHandler.applyNoContentUI();
       }
@@ -129,7 +131,7 @@ export class AmpAdCustom extends AMP.BaseElement {
   getFullUrl_() {
     // If this ad doesn't have a slot defined, just return the base URL
     if (this.slot_ === null) {
-      return this.url_;
+      return /** @type {string} */ (this.url_);
     }
     if (ampCustomadFullUrls === null) {
       // The array of ad urls has not yet been built, do so now.
@@ -153,7 +155,7 @@ export class AmpAdCustom extends AMP.BaseElement {
       }
       for (const baseUrl in slots) {
         ampCustomadFullUrls[baseUrl] = addParamToUrl(baseUrl, 'ampslots',
-          slots[baseUrl].join(','));
+            slots[baseUrl].join(','));
       }
     }
     return ampCustomadFullUrls[this.url_];

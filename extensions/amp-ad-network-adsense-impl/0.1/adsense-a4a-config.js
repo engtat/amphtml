@@ -26,7 +26,7 @@ import {
 import {isExperimentOn} from '../../../src/experiments';
 
 /** @const {!string}  @private */
-const ADSENSE_A4A_EXPERIMENT_NAME = 'expAdsenseA4A';
+export const ADSENSE_A4A_EXPERIMENT_NAME = 'expAdsenseA4A';
 
 // The following experiment IDs are used by Google-side servers to
 // understand what experiment is running and what mode the A4A code is
@@ -103,7 +103,7 @@ export function adsenseIsA4AEnabled(win, element) {
 
   return !!element.getAttribute('data-ad-client') &&
       googleAdsIsA4AEnabled(
-        win, element, ADSENSE_A4A_EXPERIMENT_NAME,
-        externalBranches, internalBranches,
-        ADSENSE_A4A_EXTERNAL_DELAYED_EXPERIMENT_BRANCHES_PRE_LAUNCH);
+          win, element, ADSENSE_A4A_EXPERIMENT_NAME,
+          externalBranches, internalBranches,
+          ADSENSE_A4A_EXTERNAL_DELAYED_EXPERIMENT_BRANCHES_PRE_LAUNCH);
 }

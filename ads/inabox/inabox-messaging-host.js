@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import {FrameOverlayManager} from './frame-overlay-manager';
 import {PositionObserver} from './position-observer';
 import {
   serializeMessage,
@@ -21,7 +22,8 @@ import {
   MessageType,
 } from '../../src/3p-frame-messaging';
 import {dev} from '../../src/log';
-import {expandFrame, collapseFrame} from './frame-overlay-helper';
+import {getData} from '../../src/event-helper';
+import {dict} from '../../src/utils/object';
 
 /** @const */
 const TAG = 'InaboxMessagingHost';
@@ -70,6 +72,7 @@ export class InaboxMessagingHost {
     this.registeredIframeSentinels_ = Object.create(null);
     this.positionObserver_ = new PositionObserver(win);
     this.msgObservable_ = new NamedObservable();
+    this.frameOverlayManager_ = new FrameOverlayManager(win);
 
     this.msgObservable_.listen(
         MessageType.SEND_POSITIONS, this.handleSendPositions_);
@@ -89,24 +92,24 @@ export class InaboxMessagingHost {
    * {type: string, sentinel: string}. The allowed types are listed in the
    * REQUEST_TYPE enum.
    *
-   * @param message {!{data: *, source: !Window, origin: string}}
+   * @param {!MessageEvent} message
    * @return {boolean} true if message get successfully processed
    */
   processMessage(message) {
-    const request = deserializeMessage(message.data);
-    if (!request || !request.sentinel) {
+    const request = deserializeMessage(getData(message));
+    if (!request || !request['sentinel']) {
       dev().fine(TAG, 'Ignored non-AMP message:', message);
       return false;
     }
 
     const iframe =
-        this.getFrameElement_(message.source, request.sentinel);
+        this.getFrameElement_(message.source, request['sentinel']);
     if (!iframe) {
       dev().info(TAG, 'Ignored message from untrusted iframe:', message);
       return false;
     }
 
-    if (!this.msgObservable_.fire(request.type, this,
+    if (!this.msgObservable_.fire(request['type'], this,
         [iframe, request, message.source, message.origin])) {
       dev().warn(TAG, 'Unprocessed AMP message:', message);
       return false;
@@ -148,12 +151,15 @@ export class InaboxMessagingHost {
   // 1. Reject request if frame is out of focus
   // 2. Disable zoom and scroll on parent doc
   handleEnterFullOverlay_(iframe, request, source, origin) {
-    expandFrame(this.win_, iframe, () => {
+    this.frameOverlayManager_.expandFrame(iframe, boxRect => {
       source./*OK*/postMessage(
           serializeMessage(
               MessageType.FULL_OVERLAY_FRAME_RESPONSE,
               request.sentinel,
-              {success: true}),
+              dict({
+                'success': true,
+                'boxRect': boxRect,
+              })),
           origin);
     });
 
@@ -168,12 +174,15 @@ export class InaboxMessagingHost {
    * @return {boolean}
    */
   handleCancelFullOverlay_(iframe, request, source, origin) {
-    collapseFrame(this.win_, iframe, () => {
+    this.frameOverlayManager_.collapseFrame(iframe, boxRect => {
       source./*OK*/postMessage(
           serializeMessage(
               MessageType.CANCEL_FULL_OVERLAY_FRAME_RESPONSE,
               request.sentinel,
-              {success: true}),
+              dict({
+                'success': true,
+                'boxRect': boxRect,
+              })),
           origin);
     });
 
