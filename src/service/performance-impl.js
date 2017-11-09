@@ -16,9 +16,7 @@
 
 import {layoutRectLtwh} from '../layout-rect';
 import {registerServiceBuilder, getService} from '../service';
-import {resourcesForDoc} from '../services';
-import {viewerForDoc} from '../services';
-import {viewportForDoc} from '../services';
+import {Services} from '../services';
 import {whenDocumentComplete} from '../document-ready';
 import {getMode} from '../mode';
 import {isCanary} from '../experiments';
@@ -106,11 +104,7 @@ export class Performance {
     }
 
     // Tick window.onload event.
-    whenDocumentComplete(win.document).then(() => {
-      this.onload_();
-      this.flush();
-    });
-
+    whenDocumentComplete(win.document).then(() => this.onload_());
     this.registerPaintTimingObserver_();
   }
 
@@ -119,8 +113,8 @@ export class Performance {
    * @return {!Promise}
    */
   coreServicesAvailable() {
-    this.viewer_ = viewerForDoc(this.win.document);
-    this.resources_ = resourcesForDoc(this.win.document);
+    this.viewer_ = Services.viewerForDoc(this.win.document);
+    this.resources_ = Services.resourcesForDoc(this.win.document);
 
     this.isPerformanceTrackingOn_ = this.viewer_.isEmbedded() &&
         this.viewer_.getParam('csi') === '1';
@@ -167,6 +161,7 @@ export class Performance {
   onload_() {
     this.tick('ol');
     this.tickLegacyFirstPaintTime_();
+    this.flush();
   }
 
   /**
@@ -177,16 +172,32 @@ export class Performance {
     if (!this.win.PerformancePaintTiming) {
       return;
     }
+    // Chrome doesn't implement the buffered flag for PerformanceObserver.
+    // That means we need to read existing entries and maintain state
+    // as to whether we have reported a value yet, since in the future it may
+    // be reported twice.
+    // https://bugs.chromium.org/p/chromium/issues/detail?id=725567
+    let recordedFirstPaint = false;
+    let recordedFirstContentfulPaint = false;
+    const processEntry = entry => {
+      if (entry.name == 'first-paint' && !recordedFirstPaint) {
+        this.tickDelta('fp', entry.startTime + entry.duration);
+        recordedFirstPaint = true;
+      }
+      else if (entry.name == 'first-contentful-paint'
+          && !recordedFirstContentfulPaint) {
+        this.tickDelta('fcp', entry.startTime + entry.duration);
+        recordedFirstContentfulPaint = true;
+      }
+    };
     const observer = new this.win.PerformanceObserver(list => {
-      list.getEntries().forEach(entry => {
-        if (entry.name == 'first-paint') {
-          this.tickDelta('fp', entry.startTime + entry.duration);
-        }
-        else if (entry.name == 'first-contentful-paint') {
-          this.tickDelta('fcp', entry.startTime + entry.duration);
-        }
-      });
+      list.getEntries().forEach(processEntry);
+      this.flush();
     });
+    // Programmatically read once as currently PerformanceObserver does not
+    // report past entries as of Chrome 61.
+    // https://bugs.chromium.org/p/chromium/issues/detail?id=725567
+    this.win.performance.getEntriesByType('paint').forEach(processEntry);
 
     observer.observe({entryTypes: ['paint']});
   }
@@ -266,7 +277,7 @@ export class Performance {
    * @private
    */
   whenViewportLayoutComplete_() {
-    const size = viewportForDoc(this.win.document).getSize();
+    const size = Services.viewportForDoc(this.win.document).getSize();
     const rect = layoutRectLtwh(0, 0, size.width, size.height);
     return this.resources_.getResourcesInRect(
         this.win, rect, /* isInPrerender */ true)

@@ -23,7 +23,6 @@ module.exports = {
     'fixture',
     'browserify',
     'mocha',
-    'chai-as-promised',
     'sinon-chai',
     'chai',
   ],
@@ -40,11 +39,49 @@ module.exports = {
   browserify: {
     watch: true,
     debug: true,
-    transform: ['babelify'],
+    transform: [
+      ['babelify'],
+    ],
     bundleDelay: 900,
   },
 
-  reporters: [process.env.TRAVIS ? 'dots' : 'progress'],
+  reporters: ['super-dots', 'karmaSimpleReporter'],
+
+  superDotsReporter: {
+    nbDotsPerLine: 10000,
+    color: {
+      success: 'green',
+      failure: 'red',
+      ignore: 'yellow',
+    },
+    icon: {
+      success: '●',
+      failure: '●',
+      ignore: '○',
+    },
+  },
+
+  specReporter: {
+    suppressPassed: true,
+    suppressSkipped: true,
+    suppressFailed: false,
+    suppressErrorSummary: true,
+    maxLogLines: 10,
+  },
+
+  mochaReporter: {
+    output: 'full',
+    colors: {
+      success: 'green',
+      error: 'red',
+      info: 'yellow',
+    },
+    symbols: {
+      success: '●',
+      error: '●',
+      info: '○',
+    },
+  },
 
   port: 9876,
 
@@ -60,9 +97,9 @@ module.exports = {
     '/test/': '/base/test/',
   },
 
-  // Can't import Karma constants config.LOG_ERROR & config.LOG_WARN,
-  // so we hard code the strings here. Hopefully they'll never change.
-  logLevel: process.env.TRAVIS ? 'ERROR' : 'WARN',
+  // Can't import the Karma constant config.LOG_ERROR, so we hard code it here.
+  // Hopefully it'll never change.
+  logLevel: 'ERROR',
 
   autoWatch: true,
 
@@ -74,7 +111,7 @@ module.exports = {
   concurrency: 6,
 
   customLaunchers: {
-    /*eslint "google-camelcase/google-camelcase": 0*/
+    /* eslint "google-camelcase/google-camelcase": 0*/
     Chrome_travis_ci: {
       base: 'Chrome',
       flags: ['--no-sandbox', '--disable-extensions'],
@@ -116,6 +153,11 @@ module.exports = {
       base: 'SauceLabs',
       browserName: 'iphone',
       version: '10.0',
+    },
+    SL_iOS_11_0: {
+      base: 'SauceLabs',
+      browserName: 'iphone',
+      version: '11.0',
     },
     SL_Firefox_latest: {
       base: 'SauceLabs',
@@ -175,16 +217,20 @@ module.exports = {
   plugins: [
     'karma-browserify',
     'karma-chai',
-    'karma-chai-as-promised',
     'karma-chrome-launcher',
+    'karma-coverage',
     'karma-edge-launcher',
     'karma-firefox-launcher',
     'karma-fixture',
     'karma-html2js-preprocessor',
+    'karma-ie-launcher',
     'karma-mocha',
+    'karma-mocha-reporter',
     'karma-safari-launcher',
     'karma-sauce-launcher',
+    'karma-simple-reporter',
     'karma-sinon-chai',
+    'karma-super-dots-reporter',
     {
       'middleware:custom': ['factory', function() {
         return require(require.resolve('../app.js'));

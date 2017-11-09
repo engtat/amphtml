@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 import {openWindowDialog} from '../../../src/dom';
-import {user} from '../../../src/log';
-import {xhrFor} from '../../../src/services';
+import {dev, user} from '../../../src/log';
+import {Services} from '../../../src/services';
+import {toWin} from '../../../src/types';
 
 import {Util} from './util';
 
@@ -48,13 +49,16 @@ export class PinItButton {
     user().assert(rootElement.getAttribute('data-description'),
         'The data-description attribute is required for Pin It buttons');
     this.element = rootElement;
-    this.xhr = xhrFor(rootElement.ownerDocument.defaultView);
+    this.xhr = Services.xhrFor(toWin(rootElement.ownerDocument.defaultView));
     this.color = rootElement.getAttribute('data-color');
     this.count = rootElement.getAttribute('data-count');
     this.lang = rootElement.getAttribute('data-lang');
     this.round = rootElement.getAttribute('data-round');
     this.tall = rootElement.getAttribute('data-tall');
     this.description = rootElement.getAttribute('data-description');
+    this.media = null;
+    this.url = null;
+    this.href = null;
   }
 
   /**
@@ -63,14 +67,13 @@ export class PinItButton {
    */
   handleClick(event) {
     event.preventDefault();
-    openWindowDialog(window, this.href, '_pinit', POP);
+    openWindowDialog(window, dev().assertString(this.href), '_pinit', POP);
     Util.log('&type=button_pinit');
   }
 
   /**
    * Fetch the remote Pin count for the source URL
-   * @param {Event} evt: the HTML event object
-   * @returns {Promise}
+   * @return {Promise}
    */
   fetchCount() {
     const url = `https://widgets.pinterest.com/v1/urls/count.json?return_jsonp=false&url=${this.url}`;
@@ -81,8 +84,8 @@ export class PinItButton {
 
   /**
    * Pretty print the Pin count with english suffixes
-   * @param {number} count: the Pin count for the source URL
-   * @returns {string}
+   * @param {number|string} count: the Pin count for the source URL
+   * @return {string}
    */
   formatPinCount(count) {
     if (count > 999) {
@@ -96,14 +99,14 @@ export class PinItButton {
         }
       }
     }
-    return count;
+    return String(count);
   }
 
   /**
    * Render helper for the optional count bubble
    * @param {string} count: the data-count attribute
    * @param {string} heightClass: the height class to apply for spacing
-   * @returns {string}
+   * @return {Element}
    */
   renderCount(count, heightClass) {
     Util.log('&type=pidget&button_count=1');
@@ -115,8 +118,8 @@ export class PinItButton {
 
   /**
    * Render the follow button
-   * @param {number} count: optional Pin count for the source URL
-   * @returns {Element}
+   * @param {JsonObject} count: optional Pin count for the source URL
+   * @return {Element}
    */
   renderTemplate(count) {
     const CLASS = {
@@ -131,12 +134,12 @@ export class PinItButton {
       'i-amphtml-fill-content',
     ];
 
-    let countBubble = '';
+    let countBubble = null;
     if (!this.round) {
       clazz.push(`-amp-pinterest${CLASS.lang}-${CLASS.color}${CLASS.height}`);
       if (count) {
         clazz.push(`-amp-pinterest-count-pad-${this.count}${CLASS.height}`);
-        countBubble = this.renderCount(count.count, CLASS.height);
+        countBubble = this.renderCount(count['count'], CLASS.height);
       }
     }
 
@@ -154,7 +157,7 @@ export class PinItButton {
 
   /**
    * Prepare the render data, create the node and add handlers
-   * @returns {!Promise}
+   * @return {!Promise}
    */
   render() {
     this.description = encodeURIComponent(this.description);

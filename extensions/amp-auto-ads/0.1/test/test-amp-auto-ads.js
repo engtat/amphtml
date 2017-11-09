@@ -20,9 +20,8 @@ import {
   toggleExperiment,
   forceExperimentBranch,
 } from '../../../../src/experiments';
-import {xhrFor} from '../../../../src/services';
+import {Services} from '../../../../src/services';
 import {waitForChild} from '../../../../src/dom';
-import {viewportForDoc} from '../../../../src/services';
 import {
   ADSENSE_AMP_AUTO_ADS_HOLDOUT_EXPERIMENT_NAME,
   AdSenseAmpAutoAdsHoldoutBranches,
@@ -48,6 +47,7 @@ describes.realWin('amp-auto-ads', {
   let ampAutoAds;
   let ampAutoAdsElem;
   let xhr;
+  let whenVisible;
   let configObj;
 
   beforeEach(() => {
@@ -64,7 +64,12 @@ describes.realWin('amp-auto-ads', {
     toggleExperiment(env.win, 'amp-auto-ads', true);
     sandbox = env.sandbox;
 
-    const viewportMock = sandbox.mock(viewportForDoc(env.win.document));
+    const extensions = Services.extensionsFor(env.win);
+    sandbox.stub(extensions, 'loadElementClass',
+        () => Promise.resolve(() => {}));
+
+    const viewportMock =
+        sandbox.mock(Services.viewportForDoc(env.win.document));
     viewportMock.expects('getSize').returns(
         {width: 320, height: 500}).atLeast(1);
 
@@ -136,7 +141,7 @@ describes.realWin('amp-auto-ads', {
       optInStatus: [1],
     };
 
-    xhr = xhrFor(env.win);
+    xhr = Services.xhrFor(env.win);
     xhr.fetchJson = () => {
       return Promise.resolve({
         json() {
@@ -146,6 +151,10 @@ describes.realWin('amp-auto-ads', {
     };
     sandbox.spy(xhr, 'fetchJson');
 
+    const viewer = Services.viewerForDoc(env.ampdoc);
+    whenVisible = sandbox.stub(viewer, 'whenFirstVisible');
+    whenVisible.returns(Promise.resolve());
+
     ampAutoAds = new AmpAutoAds(ampAutoAdsElem);
   });
 
@@ -154,6 +163,26 @@ describes.realWin('amp-auto-ads', {
     expect(adElement.getAttribute('type')).to.equal('adsense');
     expect(adElement.getAttribute('data-ad-client')).to.equal(AD_CLIENT);
   }
+
+  it('should wait for viewer visible', () => {
+    let resolve;
+    const visible = new Promise(res => {
+      resolve = res;
+    });
+    whenVisible.returns(visible);
+
+    ampAutoAdsElem.setAttribute('data-ad-client', AD_CLIENT);
+    ampAutoAdsElem.setAttribute('type', 'adsense');
+    ampAutoAds.buildCallback();
+
+    return Promise.resolve().then(() => {
+      expect(xhr.fetchJson).to.not.have.been.called;
+      resolve();
+      return visible;
+    }).then(() => {
+      expect(xhr.fetchJson).to.have.been.called;
+    });
+  });
 
   it('should insert three ads on page using config', () => {
     ampAutoAdsElem.setAttribute('data-ad-client', AD_CLIENT);
@@ -295,7 +324,8 @@ describes.realWin('amp-auto-ads', {
     return ampAutoAds.layoutCallback().then(() => {
       expect(xhr.fetchJson).to.have.been.calledWith(
           '//pagead2.googlesyndication.com/getconfig/ama?client=' +
-          AD_CLIENT + '&plah=localhost&ama_t=amp', {
+          AD_CLIENT + '&plah=localhost&ama_t=amp&' +
+          'url=http%3A%2F%2Flocalhost%3A9876%2Fcontext.html', {
             mode: 'cors',
             method: 'GET',
             credentials: 'omit',

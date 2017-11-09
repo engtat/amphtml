@@ -20,7 +20,17 @@ import {user} from '../../../src/log';
 
 class AmpVine extends AMP.BaseElement {
 
-  /** @override */
+  /** @param {!AmpElement} element */
+  constructor(element) {
+    super(element);
+    /** @private {?Element} */
+    this.iframe_ = null;
+  }
+
+  /**
+   * @param {boolean=} onLayout
+   * @override
+   */
   preconnectCallback(onLayout) {
     // the Vine iframe
     this.preconnect.url('https://vine.co', onLayout);
@@ -47,7 +57,6 @@ class AmpVine extends AMP.BaseElement {
     this.applyFillContent(iframe);
     this.element.appendChild(iframe);
 
-    /** @private {?Element} */
     this.iframe_ = iframe;
 
     return this.loadPromise(iframe);
@@ -61,4 +70,7 @@ class AmpVine extends AMP.BaseElement {
   }
 }
 
-AMP.registerElement('amp-vine', AmpVine);
+
+AMP.extension('amp-vine', '0.1', AMP => {
+  AMP.registerElement('amp-vine', AmpVine);
+});

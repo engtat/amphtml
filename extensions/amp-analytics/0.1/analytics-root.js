@@ -27,10 +27,7 @@ import {dev, user} from '../../../src/log';
 import {getMode} from '../../../src/mode';
 import {layoutRectLtwh} from '../../../src/layout-rect';
 import {map} from '../../../src/utils/object';
-import {
-  viewerForDoc,
-  viewportForDoc,
-} from '../../../src/services';
+import {Services} from '../../../src/services';
 import {whenContentIniLoad} from '../../../src/friendly-iframe-embed';
 
 const TAG = 'amp-analytics';
@@ -96,7 +93,7 @@ export class AnalyticsRoot {
    * @return {!../../../src/service/viewer-impl.Viewer}
    */
   getViewer() {
-    return viewerForDoc(this.ampdoc);
+    return Services.viewerForDoc(this.ampdoc);
   }
 
   /**
@@ -145,11 +142,26 @@ export class AnalyticsRoot {
   getElementById(unusedId) {}
 
   /**
+   * Returns the tracker for the specified name and list of allowed types.
+   *
+   * @param {string} name
+   * @param {!Object<string, function(new:./events.EventTracker)>} whitelist
+   * @return {?./events.EventTracker}
+   */
+  getTrackerForWhitelist(name, whitelist) {
+    const trackerProfile = whitelist[name];
+    if (trackerProfile) {
+      return this.getTracker(name, trackerProfile);
+    }
+    return null;
+  }
+
+  /**
    * Returns the tracker for the specified name and type. If the tracker
    * has not been requested before, it will be created.
    *
    * @param {string} name
-   * @param {function(new:./events.EventTracker, !AnalyticsRoot)} klass
+   * @param {function(new:./events.CustomEventTracker, !AnalyticsRoot)|function(new:./events.ClickEventTracker, !AnalyticsRoot)|function(new:./events.SignalTracker, !AnalyticsRoot)|function(new:./events.IniLoadTracker, !AnalyticsRoot)|function(new:./events.VideoEventTracker, !AnalyticsRoot)|function(new:./events.VideoEventTracker, !AnalyticsRoot)|function(new:./events.VisibilityTracker, !AnalyticsRoot)} klass
    * @return {!./events.EventTracker}
    */
   getTracker(name, klass) {
@@ -363,7 +375,7 @@ export class AmpdocAnalyticsRoot extends AnalyticsRoot {
 
   /** @override */
   whenIniLoaded() {
-    const viewport = viewportForDoc(this.ampdoc);
+    const viewport = Services.viewportForDoc(this.ampdoc);
     let rect;
     if (getMode(this.ampdoc.win).runtime == 'inabox') {
       // TODO(dvoytenko, #7971): This is currently addresses incorrect position

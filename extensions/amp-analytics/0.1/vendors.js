@@ -47,6 +47,7 @@ export const ANALYTICS_CONFIG = /** @type {!JsonObject} */ ({
       'documentReferrer': 'DOCUMENT_REFERRER',
       'domainLookupTime': 'DOMAIN_LOOKUP_TIME',
       'domInteractiveTime': 'DOM_INTERACTIVE_TIME',
+      'externalReferrer': 'EXTERNAL_REFERRER',
       'navRedirectCount': 'NAV_REDIRECT_COUNT',
       'navTiming': 'NAV_TIMING',
       'navType': 'NAV_TYPE',
@@ -73,6 +74,7 @@ export const ANALYTICS_CONFIG = /** @type {!JsonObject} */ ({
       'timezone': 'TIMEZONE',
       'title': 'TITLE',
       'totalEngagedTime': 'TOTAL_ENGAGED_TIME',
+      'userAgent': 'USER_AGENT',
       'viewer': 'VIEWER',
       'viewportHeight': 'VIEWPORT_HEIGHT',
       'viewportWidth': 'VIEWPORT_WIDTH',
@@ -139,6 +141,36 @@ export const ANALYTICS_CONFIG = /** @type {!JsonObject} */ ({
     },
   },
 
+  'alexametrics': {
+    'requests': {
+      'base': 'https://${ampAtrkHost}/atrk.gif?account=${atrk_acct}&domain=${domain}',
+      'pageview': '${base}&jsv=amp-${ampVersion}' +
+        '&frame_height=${viewportHeight}&frame_width=${viewportWidth}' +
+        '&title=${title}&time=${timestamp}&time_zone_offset=${timezone}' +
+        '&screen_params=${screenWidth}x${screenHeight}x${screenColorDepth}' +
+        '&ref_url=${documentReferrer}&host_url=${sourceUrl}' +
+        '&random_number=${random}&user_cookie=${clientId(__auc)}' +
+        '&user_cookie_flag=0&user_lang=${browserLanguage}' +
+        '&amp_doc_url=${ampdocUrl}',
+    },
+    'vars': {
+      'atrk_acct': '',
+      'domain': '',
+      'ampAtrkHost': 'certify-amp.alexametrics.com',
+    },
+    'triggers': {
+      'trackPageview': {
+        'on': 'visible',
+        'request': 'pageview',
+      },
+    },
+    'transport': {
+      'xhrpost': false,
+      'beacon': false,
+      'image': true,
+    },
+  },
+
   'atinternet': {
     'transport': {'beacon': false, 'xhrpost': false, 'image': true},
     'requests': {
@@ -169,6 +201,12 @@ export const ANALYTICS_CONFIG = /** @type {!JsonObject} */ ({
       'beacon': false,
       'xhrpost': false,
       'image': true,
+    },
+  },
+
+  'bg': {
+    'transport': {
+      'iframe': 'https://tpc.googlesyndication.com/b4a/b4a-runner.html',
     },
   },
 
@@ -370,8 +408,15 @@ export const ANALYTICS_CONFIG = /** @type {!JsonObject} */ ({
     'requests': {
       'host': 'https://sb.scorecardresearch.com',
       'base': '${host}/b?',
-      'pageview': '${base}c1=2&c2=${c2}&rn=${random}&c8=${title}' +
-        '&c7=${canonicalUrl}&c9=${documentReferrer}&cs_c7amp=${ampdocUrl}',
+      'pageview': '${base}c1=2' +
+        '&c2=${c2}' +
+        '&cs_pv=${pageViewId}' +
+        '&c12=${clientId(comScore)}' +
+        '&rn=${random}' +
+        '&c8=${title}' +
+        '&c7=${canonicalUrl}' +
+        '&c9=${documentReferrer}' +
+        '&cs_c7amp=${ampdocUrl}',
     },
     'triggers': {
       'defaultPageview': {
@@ -411,7 +456,7 @@ export const ANALYTICS_CONFIG = /** @type {!JsonObject} */ ({
 
   'dynatrace': {
     'requests': {
-      'endpoint': '${protocol}://${tenant}.${environment}:${port}/ampbf',
+      'endpoint': '${protocol}://${tenant}${separator}${environment}:${port}/ampbf/${tenantpath}',
       'pageview': '${endpoint}?type=js&' +
         'flavor=amp&' +
         'v=1&' +
@@ -467,6 +512,7 @@ export const ANALYTICS_CONFIG = /** @type {!JsonObject} */ ({
       'tenant': '',
       'environment': 'live.dynatrace.com',
       'port': '443',
+      'separator': '.',
     },
   },
 
@@ -644,6 +690,7 @@ export const ANALYTICS_CONFIG = /** @type {!JsonObject} */ ({
       'clientId': 'CLIENT_ID(AMP_ECID_GOOGLE,,_ga)',
       'dataSource': 'AMP',
       'anonymizeIP': 'aip',
+      'errorParam': '${errorName}-${errorMessage}',
     },
     'requests': {
       'host': 'https://www.google-analytics.com',
@@ -658,7 +705,7 @@ export const ANALYTICS_CONFIG = /** @type {!JsonObject} */ ({
           'cid=${clientId}&' +
           'tid=${account}&' +
           'dl=${documentLocation}&' +
-          'dr=${documentReferrer}&' +
+          'dr=${externalReferrer}&' +
           'sd=${screenColorDepth}&' +
           'ul=${browserLanguage}&' +
           'de=${documentCharset}',
@@ -695,6 +742,10 @@ export const ANALYTICS_CONFIG = /** @type {!JsonObject} */ ({
           'pdt=${pageDownloadTime}&' +
           'clt=${contentLoadTime}&' +
           'dit=${domInteractiveTime}' +
+          '${baseSuffix}',
+      'error': '${host}/collect?${basePrefix}&' +
+          't=exception&' +
+          'exd=${errorParam}' +
           '${baseSuffix}',
     },
     'triggers': {
@@ -736,58 +787,63 @@ export const ANALYTICS_CONFIG = /** @type {!JsonObject} */ ({
       'clientId': 'CLIENT_ID(AMP_ECID_GOOGLE,,_ga)',
       'dataSource': 'AMP',
       'anonymizeIP': 'aip',
+      'errorParam': '${errorName}-${errorMessage}',
     },
     'requests': {
       'host': 'https://www.google-analytics.com',
       'basePrefix': 'v=1&' +
-      '_v=a1&' +
-      'ds=${dataSource}&' +
-      '${anonymizeIP}&' +
-      '_s=${requestCount}&' +
-      'dt=${title}&' +
-      'sr=${screenWidth}x${screenHeight}&' +
-      '_utmht=${timestamp}&' +
-      'cid=${clientId}&' +
-      'tid=${account}&' +
-      'dl=${documentLocation}&' +
-      'dr=${documentReferrer}&' +
-      'sd=${screenColorDepth}&' +
-      'ul=${browserLanguage}&' +
-      'de=${documentCharset}',
+          '_v=a1&' +
+          'ds=${dataSource}&' +
+          '${anonymizeIP}&' +
+          '_s=${requestCount}&' +
+          'dt=${title}&' +
+          'sr=${screenWidth}x${screenHeight}&' +
+          '_utmht=${timestamp}&' +
+          'cid=${clientId}&' +
+          'tid=${account}&' +
+          'dl=${documentLocation}&' +
+          'dr=${externalReferrer}&' +
+          'sd=${screenColorDepth}&' +
+          'ul=${browserLanguage}&' +
+          'de=${documentCharset}',
       'baseSuffix': '&a=${pageViewId}&' +
-      'z=${random}',
+          'z=${random}',
       'pageview': '${host}/r/collect?${basePrefix}&' +
-      't=pageview&' +
-      'jid=${random}&' +
-      '_r=1' +
-      '${baseSuffix}',
+          't=pageview&' +
+          'jid=${random}&' +
+          '_r=1' +
+          '${baseSuffix}',
       'event': '${host}/collect?${basePrefix}&' +
-      't=event&' +
-      'jid=&' +
-      'ec=${eventCategory}&' +
-      'ea=${eventAction}&' +
-      'el=${eventLabel}&' +
-      'ev=${eventValue}' +
-      '${baseSuffix}',
+          't=event&' +
+          'jid=&' +
+          'ec=${eventCategory}&' +
+          'ea=${eventAction}&' +
+          'el=${eventLabel}&' +
+          'ev=${eventValue}' +
+          '${baseSuffix}',
       'social': '${host}/collect?${basePrefix}&' +
-      't=social&' +
-      'jid=&' +
-      'sa=${socialAction}&' +
-      'sn=${socialNetwork}&' +
-      'st=${socialTarget}' +
-      '${baseSuffix}',
+          't=social&' +
+          'jid=&' +
+          'sa=${socialAction}&' +
+          'sn=${socialNetwork}&' +
+          'st=${socialTarget}' +
+          '${baseSuffix}',
       'timing': '${host}/collect?${basePrefix}&' +
-      't=${timingRequestType}&' +
-      'jid=&' +
-      'plt=${pageLoadTime}&' +
-      'dns=${domainLookupTime}&' +
-      'tcp=${tcpConnectTime}&' +
-      'rrt=${redirectTime}&' +
-      'srt=${serverResponseTime}&' +
-      'pdt=${pageDownloadTime}&' +
-      'clt=${contentLoadTime}&' +
-      'dit=${domInteractiveTime}' +
-      '${baseSuffix}',
+          't=${timingRequestType}&' +
+          'jid=&' +
+          'plt=${pageLoadTime}&' +
+          'dns=${domainLookupTime}&' +
+          'tcp=${tcpConnectTime}&' +
+          'rrt=${redirectTime}&' +
+          'srt=${serverResponseTime}&' +
+          'pdt=${pageDownloadTime}&' +
+          'clt=${contentLoadTime}&' +
+          'dit=${domInteractiveTime}' +
+          '${baseSuffix}',
+      'error': '${host}/collect?${basePrefix}&' +
+          't=exception&' +
+          'exd=${errorParam}' +
+          '${baseSuffix}',
     },
     'triggers': {
       'performanceTiming': {
@@ -903,6 +959,103 @@ export const ANALYTICS_CONFIG = /** @type {!JsonObject} */ ({
     },
   },
 
+  'mediarithmics': {
+    'vars': {
+      'domain': 'events.mediarithmics.com',
+      'url': 'SOURCE_URL',
+      'event_name': '$page_view',
+      'referrer': 'DOCUMENT_REFERRER',
+    },
+    'requests': {
+      'host': 'https://${domain}',
+      'pageview': '${host}/v1/visits/pixel?' +
+        '$site_token=${site_token}' +
+        '&$url=${url}' +
+        '&$ev=${event_name}' +
+        '&$referrer=${referrer}',
+    },
+    'triggers': {
+      'trackPageview': {
+        'on': 'visible',
+        'request': 'pageview',
+      },
+    },
+    'transport': {
+      'beacon': false,
+      'xhrpost': false,
+      'image': true,
+    },
+  },
+
+  'mediator': {
+    'requests': {
+      'host': '//collector.mediator.media/amp/?',
+      'prefix': '${host}cid=${mediator_id}&url=${canonicalUrl}' +
+                '&ref=${documentReferrer}&p=4&',
+      'suffix': 'vh=${viewportHeight}&sh=${scrollHeight}&st=${scrollTop}',
+      'pageview': '${prefix}e=v',
+      'timer': '${prefix}e=t&${suffix}',
+      's0': '${prefix}e=s0',
+      's1': '${prefix}e=s1',
+      's2': '${prefix}e=s2',
+      's3': '${prefix}e=s3',
+    },
+    'vars': {
+      'mediator_id': '',
+    },
+    'triggers': {
+      'trackPageview': {
+        'on': 'visible',
+        'request': 'pageview',
+      },
+      'scrollPing0': {
+        'on': 'scroll',
+        'scrollSpec': {
+          'verticalBoundaries': [
+            5,
+          ],
+        },
+        'request': 's0',
+      },
+      'scrollPing1': {
+        'on': 'scroll',
+        'scrollSpec': {
+          'verticalBoundaries': [
+            35,
+          ],
+        },
+        'request': 's1',
+      },
+      'scrollPing2': {
+        'on': 'scroll',
+        'scrollSpec': {
+          'verticalBoundaries': [
+            65,
+          ],
+        },
+        'request': 's2',
+      },
+      'scrollPing3': {
+        'on': 'scroll',
+        'scrollSpec': {
+          'verticalBoundaries': [
+            95,
+          ],
+        },
+        'request': 's3',
+      },
+      'pageTimer': {
+        'on': 'timer',
+        'timerSpec': {
+          'interval': 5,
+          'maxTimerLength': 600,
+          'immediate': false,
+        },
+        'request': 'timer',
+      },
+    },
+  },
+
   'metrika': {
     'transport': {'beacon': true, 'xhrpost': true, 'image': false},
     'requests': {
@@ -988,12 +1141,55 @@ export const ANALYTICS_CONFIG = /** @type {!JsonObject} */ ({
     },
   },
 
+  'newrelic': {
+    'requests': {
+      'pageview': 'https://${beacon}/amp?appId=${appId}' +
+        '&licenseKey=${licenseKey}' +
+        '&ampUrl=${ampdocUrl}' +
+        '&canonicalUrl=${canonicalUrl}' +
+        '&timeToDomContentLoadedEventEnd=' +
+          '${navTiming(domContentLoadedEventEnd)}' +
+        '&timeToDomInteractive=${navTiming(domInteractive)}' +
+        '&timeToDomComplete=${navTiming(domComplete)}' +
+        '&timeToDomLoading=${navTiming(domLoading)}' +
+        '&timeToResponseStart=${navTiming(responseStart)}' +
+        '&timeToResponseEnd=${navTiming(responseEnd)}' +
+        '&timeToLoadEventStart=${navTiming(loadEventStart)}' +
+        '&timeToLoadEventEnd=${navTiming(loadEventEnd)}' +
+        '&timeToConnectStart=${navTiming(connectStart)}' +
+        '&timeToConnectEnd=${navTiming(connectEnd)}' +
+        '&timeToFetchStart=${navTiming(fetchStart)}' +
+        '&timeToRequestStart=${navTiming(requestStart)}' +
+        '&timeToUnloadEventStart=${navTiming(unloadEventStart)}' +
+        '&timeToUnloadEventEnd=${navTiming(unloadEventEnd)}' +
+        '&timeToDomainLookupStart=${navTiming(domainLookupStart)}' +
+        '&timeToDomainLookupEnd=${navTiming(domainLookupEnd)}' +
+        '&timeToRedirectStart=${navTiming(redirectStart)}' +
+        '&timeToRedirectEnd=${navTiming(redirectEnd)}' +
+        '&timeToSecureConnection=${navTiming(secureConnectionStart)}' +
+        '&timestamp=${timestamp}' +
+        '&ampVersion=${ampVersion}' +
+        '&pageLoadTime=${pageLoadTime}',
+    },
+    'vars': {
+      'beacon': 'bam.nr-data.net',
+      'appId': [],
+      'licenseKey': '',
+    },
+    'triggers': {
+      'trackPageview': {
+        'on': 'ini-load',
+        'request': 'pageview',
+      },
+    },
+  },
+
   'nielsen': {
     'vars': {
       'sessionId': 'CLIENT_ID(imrworldwide)',
     },
     'requests': {
-      'session': 'https://uaid-linkage.imrworldwide.com/cgi-bin/gn?prd=session&c13=asid,P${apid}&sessionId=${sessionId},&pingtype=4&enc=false&c61=createtm,${timestamp}&rnd=${random}',
+      'session': 'https://uaid-linkage.imrworldwide.com/cgi-bin/gn?prd=session&c13=asid,P${apid}&sessionId=${sessionId}&pingtype=4&enc=false&c61=createtm,${timestamp}&rnd=${random}',
       'cloudapi': 'https://cloudapi.imrworldwide.com/nmapi/v2/${apid}/${sessionId}/a?b=%7B%22devInfo%22%3A%7B%22devId%22%3A%22${sessionId}%22%2C%22apn%22%3A%22${apn}%22%2C%22apv%22%3A%22${apv}%22%2C%22apid%22%3A%22${apid}%22%7D%2C%22metadata%22%3A%7B%22static%22%3A%7B%22type%22%3A%22static%22%2C%22section%22%3A%22${section}%22%2C%22assetid%22%3A%22${pageViewId}%22%2C%22segA%22%3A%22${segA}%22%2C%22segB%22%3A%22${segB}%22%2C%22segC%22%3A%22${segC}%22%2C%22adModel%22%3A%220%22%2C%22dataSrc%22%3A%22cms%22%7D%2C%22content%22%3A%7B%7D%2C%22ad%22%3A%7B%7D%7D%2C%22event%22%3A%22playhead%22%2C%22position%22%3A%22${timestamp}%22%2C%22data%22%3A%7B%22hidden%22%3A%22${backgroundState}%22%2C%22blur%22%3A%22${backgroundState}%22%2C%22position%22%3A%22${timestamp}%22%7D%2C%22type%22%3A%22static%22%2C%22utc%22%3A%22${timestamp}%22%2C%22index%22%3A%22${requestCount}%22%7D',
     },
     'triggers': {
@@ -1019,6 +1215,29 @@ export const ANALYTICS_CONFIG = /** @type {!JsonObject} */ ({
       'beacon': false,
       'xhrpost': false,
       'image': true,
+    },
+  },
+
+  'nielsen-marketing-cloud': {
+    'transport': {
+      'beacon': false,
+      'xhrpost': false,
+      'image': true,
+    },
+    'vars': {
+      'pubId': '',
+      'siteId': '',
+    },
+    'requests': {
+      'host': 'loadeu.exelator.com',
+      'pathPrefix': 'load/',
+      'trackurl': 'https://${host}/${pathPrefix}?p=${pubId}&g=${siteId}&j=0',
+    },
+    'triggers': {
+      'defaultPageview': {
+        'on': 'visible',
+        'request': 'trackurl',
+      },
     },
   },
 
@@ -1199,7 +1418,9 @@ export const ANALYTICS_CONFIG = /** @type {!JsonObject} */ ({
         '&referrer=${documentReferrer}' +
         '&page_url=${sourceUrl}' +
         '&user_id=${clientId(sr_amp_id)}' +
-        '&domain=${canonicalHost}',
+        '&domain=${canonicalHost}' +
+        '&article_id=${article_id}' +
+        '&ignore_metadata=${ignore_metadata}',
       'visible': '${host}/n?${baseParams}',
       'timer': '${host}/t?${baseParams}' +
         '&t=5000' +
@@ -1253,6 +1474,41 @@ export const ANALYTICS_CONFIG = /** @type {!JsonObject} */ ({
     },
   },
 
+  'shinystat': {
+    'transport': {
+      'beacon': false,
+      'xhrpost': false,
+      'image': true,
+    },
+    'requests': {
+      'base': 'https://amp.shinystat.com/cgi-bin/shinyamp.cgi',
+      'commpar': 'AMP=1&RM=${random}' +
+                 '&USER=${account}' +
+                 '&PAG=${page}' +
+                 '&HR=${canonicalUrl}' +
+                 '&REFER=${documentReferrer}' +
+                 '&RES=${screenWidth}X${screenHeight}' +
+                 '&COLOR=${screenColorDepth}' +
+                 '&CID=${clientId(AMP_CID)}' +
+                 '&PAGID=${pageViewId}' +
+                 '&TITL=${title}' +
+                 '&RQC=${requestCount}',
+      'pagepar': '&VIE=${viewer}' +
+                 '&PLT=${pageLoadTime}',
+      'eventpar': '&SSXL=1',
+      'linkpar': '&LINK=${outboundLink}',
+      'pageview': '${base}?${commpar}${pagepar}',
+      'event': '${base}?${commpar}${eventpar}',
+      'link': '${base}?${commpar}${linkpar}',
+    },
+    'triggers': {
+      'pageview': {
+        'on': 'visible',
+        'request': 'pageview',
+      },
+    },
+  },
+
   'snowplow': {
     'vars': {
       'duid': 'CLIENT_ID(_sp_id)',
@@ -1279,6 +1535,46 @@ export const ANALYTICS_CONFIG = /** @type {!JsonObject} */ ({
     },
   },
 
+  'top100': {
+    'vars': {
+      'pid': '',
+      'rid': 'PAGE_VIEW_ID',
+      'ruid': 'CLIENT_ID(ruid)',
+      'version': '1.0.0',
+    },
+    'requests': {
+      'host': 'https://kraken.rambler.ru',
+      'base': '${host}/cnt/?pid=${pid}' +
+                          '&rid=${rid}' +
+                          '&v=${version}' +
+                          '&rn=${random}' +
+                          '&ruid=${ruid}' +
+                          '&ct=amp',
+      'pageview': '${base}&et=pv' +
+                  '${_pageData}' +
+                  '${_screenData}',
+      '_screenData': '&sr=${screenWidth}x${screenHeight}' +
+                     '&cd=${screenColorDepth}-bit' +
+                     '&bs=${scrollWidth}x${scrollHeight}',
+      '_pageData': '&pt=${title}' +
+                   '&rf=${documentReferrer}' +
+                   '&en=${documentCharset}' +
+                   '&la=${browserLanguage}' +
+                   '&tz=${timezone}',
+    },
+    'triggers': {
+      'trackPageview': {
+        'on': 'visible',
+        'request': 'pageview',
+      },
+    },
+    'transport': {
+      'beacon': false,
+      'xhrpost': false,
+      'image': true,
+    },
+  },
+
   'webtrekk': {
     'requests': {
       'trackURL': 'https://${trackDomain}/${trackId}/wt',
@@ -1287,7 +1583,7 @@ export const ANALYTICS_CONFIG = /** @type {!JsonObject} */ ({
         '${timestamp},${documentReferrer},${viewportWidth}x' +
         '${viewportHeight},0&tz=${timezone}' +
         '&eid=${clientId(amp-wt3-eid)}&la=${browserLanguage}',
-      'parameterSuffix': '&pu=${canonicalUrl}',
+      'parameterSuffix': '&pu=${sourceUrl}',
       'pageParameter': '&cp1=${pageParameter1}' +
         '&cp2=${pageParameter2}&cp3=${pageParameter3}' +
         '&cp4=${pageParameter4}&cp5=${pageParameter5}' +

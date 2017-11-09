@@ -23,6 +23,9 @@ import {dict} from '../../../src/utils/object';
 import {tryFocus} from '../../../src/dom';
 import {parseJson} from '../../../src/json';
 
+const TAG = 'amp-accordion';
+
+
 class AmpAccordion extends AMP.BaseElement {
 
   /** @param {!AmpElement} element */
@@ -70,6 +73,7 @@ class AmpAccordion extends AMP.BaseElement {
           'See https://github.com/ampproject/amphtml/blob/master/extensions/' +
           'amp-accordion/amp-accordion.md. Found in: %s', this.element);
       const content = sectionComponents[1];
+      content.classList.add('i-amphtml-accordion-content');
       let contentId = content.getAttribute('id');
       if (!contentId) {
         contentId = this.element.id + '_AMP_content_' + index;
@@ -92,6 +96,7 @@ class AmpAccordion extends AMP.BaseElement {
       });
 
       const header = sectionComponents[0];
+      header.classList.add('i-amphtml-accordion-header');
       header.setAttribute('role', 'heading');
       header.setAttribute('aria-controls', contentId);
       header.setAttribute('aria-expanded',
@@ -246,7 +251,9 @@ class AmpAccordion extends AMP.BaseElement {
       tryFocus(newFocusHeader);
     }
   }
-
 }
 
-AMP.registerElement('amp-accordion', AmpAccordion);
+
+AMP.extension(TAG, '0.1', AMP => {
+  AMP.registerElement(TAG, AmpAccordion);
+});

@@ -21,15 +21,15 @@ import {expandTemplate} from '../../../src/string';
 import {isArray, isObject} from '../../../src/types';
 import {dict, hasOwn, map} from '../../../src/utils/object';
 import {sendRequest, sendRequestUsingIframe} from './transport';
-import {urlReplacementsForDoc} from '../../../src/services';
-import {userNotificationManagerFor} from '../../../src/services';
-import {cryptoFor} from '../../../src/crypto';
-import {timerFor, viewerForDoc, xhrFor} from '../../../src/services';
+import {IframeTransport} from './iframe-transport';
+import {getAmpAdResourceId} from '../../../src/ad-helper';
+import {getTopWindow} from '../../../src/service';
+import {Services} from '../../../src/services';
 import {toggle} from '../../../src/style';
 import {isEnumValue} from '../../../src/types';
 import {parseJson} from '../../../src/json';
+import {getMode} from '../../../src/mode';
 import {Activity} from './activity-impl';
-import {Cid} from '../../../src/service/cid-impl';
 import {
     InstrumentationService,
     instrumentationServicePromiseForDoc,
@@ -43,13 +43,7 @@ import {
 import {ANALYTICS_CONFIG} from './vendors';
 import {SANDBOX_AVAILABLE_VARS} from './sandbox-vars-whitelist';
 
-// Register doc-service factory.
-AMP.registerServiceForDoc(
-    'amp-analytics-instrumentation', InstrumentationService);
-AMP.registerServiceForDoc('activity', Activity);
-AMP.registerServiceForDoc('cid', Cid);
-
-installVariableService(AMP.win);
+const TAG = 'amp-analytics';
 
 const MAX_REPLACES = 16; // The maximum number of entries in a extraUrlParamsReplaceMap
 
@@ -57,6 +51,7 @@ const WHITELIST_EVENT_IN_SANDBOX = [
   AnalyticsEventType.VISIBLE,
   AnalyticsEventType.HIDDEN,
 ];
+
 
 export class AmpAnalytics extends AMP.BaseElement {
 
@@ -114,16 +109,19 @@ export class AmpAnalytics extends AMP.BaseElement {
     this.variableService_ = variableServiceFor(this.win);
 
     /** @private {!../../../src/service/crypto-impl.Crypto} */
-    this.cryptoService_ = cryptoFor(this.win);
+    this.cryptoService_ = Services.cryptoFor(this.win);
 
     /** @private {?Promise} */
     this.iniPromise_ = null;
+
+    /** @private {?IframeTransport} */
+    this.iframeTransport_ = null;
   }
 
   /** @override */
   getPriority() {
-    // Loads after other content.
-    return 1;
+    // Load immediately if inabox, otherwise after other content.
+    return getMode().runtime == 'inabox' ? 0 : 1;
   }
 
   /** @override */
@@ -146,8 +144,10 @@ export class AmpAnalytics extends AMP.BaseElement {
         .getAttribute('data-consent-notification-id');
 
     if (this.consentNotificationId_ != null) {
-      this.consentPromise_ = userNotificationManagerFor(this.win)
-          .then(service => service.get(this.consentNotificationId_));
+      this.consentPromise_ =
+          Services.userNotificationManagerForDoc(this.element)
+              .then(service => service.get(dev().assertString(
+                  this.consentNotificationId_)));
     }
 
     if (this.element.getAttribute('trigger') == 'immediate') {
@@ -170,6 +170,28 @@ export class AmpAnalytics extends AMP.BaseElement {
     }
   }
 
+  /** @override */
+  resumeCallback() {
+    if (this.config_['transport'] && this.config_['transport']['iframe']) {
+      this.initIframeTransport_();
+    }
+  }
+
+  /** @override */
+  unlayoutCallback() {
+    if (Services.viewerForDoc(this.getAmpDoc()).isVisible()) {
+      // amp-analytics tag was just set to display:none. Page is still loaded.
+      return false;
+    }
+
+    // Page was unloaded - free up owned resources.
+    if (this.iframeTransport_) {
+      this.iframeTransport_.detach();
+      this.iframeTransport_ = null;
+    }
+    return super.unlayoutCallback();
+  }
+
   /**
    * @return {!Promise}
    * @private
@@ -180,9 +202,9 @@ export class AmpAnalytics extends AMP.BaseElement {
     }
     toggle(this.element, false);
     this.iniPromise_ =
-        viewerForDoc(this.getAmpDoc()).whenFirstVisible()
+        Services.viewerForDoc(this.getAmpDoc()).whenFirstVisible()
             // Rudimentary "idle" signal.
-            .then(() => timerFor(this.win).promise(1))
+            .then(() => Services.timerFor(this.win).promise(1))
             .then(() => this.consentPromise_)
             .then(this.fetchRemoteConfig_.bind(this))
             .then(() => instrumentationServicePromiseForDoc(this.getAmpDoc()))
@@ -212,7 +234,7 @@ export class AmpAnalytics extends AMP.BaseElement {
 
     if (!this.config_['triggers']) {
       const TAG = this.getName_();
-      user().error(TAG, 'No triggers were found in the ' +
+      this.user().error(TAG, 'No triggers were found in the ' +
           'config. No analytics data will be sent.');
       return Promise.resolve();
     }
@@ -223,6 +245,10 @@ export class AmpAnalytics extends AMP.BaseElement {
     this.analyticsGroup_ =
         this.instrumentation_.createAnalyticsGroup(this.element);
 
+    if (this.config_['transport'] && this.config_['transport']['iframe']) {
+      this.initIframeTransport_();
+    }
+
     const promises = [];
     // Trigger callback can be synchronous. Do the registration at the end.
     for (const k in this.config_['triggers']) {
@@ -232,11 +258,11 @@ export class AmpAnalytics extends AMP.BaseElement {
             {}, trigger, undefined, true);
         const TAG = this.getName_();
         if (!trigger) {
-          user().error(TAG, 'Trigger should be an object: ', k);
+          this.user().error(TAG, 'Trigger should be an object: ', k);
           continue;
         }
         if (!trigger['on'] || !trigger['request']) {
-          user().error(TAG, '"on" and "request" ' +
+          this.user().error(TAG, '"on" and "request" ' +
               'attributes are required for data to be collected.');
           continue;
         }
@@ -245,8 +271,8 @@ export class AmpAnalytics extends AMP.BaseElement {
           const eventType = trigger['on'];
           if (isEnumValue(AnalyticsEventType, eventType) &&
               !WHITELIST_EVENT_IN_SANDBOX.includes(eventType)) {
-            user().error(TAG, eventType + 'is not supported for amp-analytics' +
-            ' in scope');
+            this.user().error(TAG, eventType +
+                'is not supported for amp-analytics in scope');
             continue;
           }
         }
@@ -278,6 +304,29 @@ export class AmpAnalytics extends AMP.BaseElement {
       }
     }
     return Promise.all(promises);
+  }
+
+  /**
+   * amp-analytics will create an iframe for vendors in
+   * extensions/amp-analytics/0.1/vendors.js who have transport/iframe defined.
+   * This is limited to MRC-accreddited vendors. The frame is removed if the
+   * user navigates/swipes away from the page, and is recreated if the user
+   * navigates back to the page.
+   * @private
+   */
+  initIframeTransport_() {
+    if (this.iframeTransport_) {
+      return;
+    }
+    const TAG = this.getName_();
+    const ampAdResourceId = user().assertString(
+        getAmpAdResourceId(this.element, getTopWindow(this.win)),
+        `${TAG}: No friendly parent amp-ad element was found for ` +
+        'amp-analytics tag with iframe transport.');
+
+    this.iframeTransport_ = new IframeTransport(this.getAmpDoc().win,
+        this.element.getAttribute('type'),
+        this.config_['transport'], ampAdResourceId);
   }
 
   /**
@@ -315,7 +364,7 @@ export class AmpAnalytics extends AMP.BaseElement {
       for (const replaceMapKey in replaceMap) {
         if (++count > MAX_REPLACES) {
           const TAG = this.getName_();
-          user().error(TAG,
+          this.user().error(TAG,
               'More than ' + MAX_REPLACES + ' extraUrlParamsReplaceMap rules ' +
               'aren\'t allowed; Skipping the rest');
           break;
@@ -355,18 +404,20 @@ export class AmpAnalytics extends AMP.BaseElement {
       fetchConfig.credentials = this.element.getAttribute('data-credentials');
     }
     const ampdoc = this.getAmpDoc();
-    return urlReplacementsForDoc(this.element).expandAsync(remoteConfigUrl)
+    return Services.urlReplacementsForDoc(this.element)
+        .expandAsync(remoteConfigUrl)
         .then(expandedUrl => {
           remoteConfigUrl = expandedUrl;
-          return xhrFor(ampdoc.win).fetchJson(remoteConfigUrl, fetchConfig);
+          return Services.xhrFor(ampdoc.win).fetchJson(
+              remoteConfigUrl, fetchConfig);
         })
         .then(res => res.json())
         .then(jsonValue => {
           this.remoteConfig_ = jsonValue;
           dev().fine(TAG, 'Remote config loaded', remoteConfigUrl);
         }, err => {
-          user().error(TAG, 'Error loading remote config: ', remoteConfigUrl,
-              err);
+          this.user().error(TAG,
+              'Error loading remote config: ', remoteConfigUrl, err);
         });
   }
 
@@ -400,10 +451,34 @@ export class AmpAnalytics extends AMP.BaseElement {
           'amp-analytics config attribute unless you plan to migrate before ' +
           'deprecation');
     }
-    const typeConfig = this.predefinedConfig_[type] || {};
+    const typeConfig = this.predefinedConfig_[type];
+    if (typeConfig) {
+      // TODO(zhouyx, #7096) Track overwrite percentage. Prevent transport overwriting
+      if (inlineConfig['transport'] || this.remoteConfig_['transport']) {
+        const TAG = this.getName_();
+        this.user().error(TAG, 'Inline or remote config should not ' +
+            'overwrite vendor transport settings');
+      }
+    }
+
+    // Do NOT allow inline or remote config to use 'transport: iframe'
+    if (inlineConfig['transport'] && inlineConfig['transport']['iframe']) {
+      this.user().error(TAG, 'Inline configs are not allowed to ' +
+          'specify transport iframe');
+      if (!getMode().localDev || getMode().test) {
+        inlineConfig['transport']['iframe'] = undefined;
+      }
+    }
+
+    if (this.remoteConfig_['transport'] &&
+        this.remoteConfig_['transport']['iframe']) {
+      this.user().error(TAG, 'Remote configs are not allowed to ' +
+          'specify transport iframe');
+      this.remoteConfig_['transport']['iframe'] = undefined;
+    }
 
     this.mergeObjects_(defaultConfig, config);
-    this.mergeObjects_(typeConfig, config, /* predefined */ true);
+    this.mergeObjects_((typeConfig || {}), config, /* predefined */ true);
     this.mergeObjects_(inlineConfig, config);
     this.mergeObjects_(this.remoteConfig_, config);
     return config;
@@ -427,16 +502,16 @@ export class AmpAnalytics extends AMP.BaseElement {
         if (isJsonScriptTag(child)) {
           inlineConfig = parseJson(children[0].textContent);
         } else {
-          user().error(TAG, 'The analytics config should ' +
+          this.user().error(TAG, 'The analytics config should ' +
               'be put in a <script> tag with type="application/json"');
         }
       } else if (children.length > 1) {
-        user().error(TAG, 'The tag should contain only one' +
+        this.user().error(TAG, 'The tag should contain only one' +
             ' <script> child.');
       }
     }
     catch (er) {
-      user().error(TAG, 'Analytics config could not be ' +
+      this.user().error(TAG, 'Analytics config could not be ' +
           'parsed. Is it in a valid JSON format?', er);
     }
     return /** @type {!JsonObject} */ (inlineConfig);
@@ -475,7 +550,7 @@ export class AmpAnalytics extends AMP.BaseElement {
     const requests = {};
     if (!this.config_ || !this.config_['requests']) {
       const TAG = this.getName_();
-      user().error(TAG, 'No request strings defined. Analytics ' +
+      this.user().error(TAG, 'No request strings defined. Analytics ' +
           'data will not be sent from this page.');
       return;
     }
@@ -534,7 +609,7 @@ export class AmpAnalytics extends AMP.BaseElement {
 
     if (!request) {
       const TAG = this.getName_();
-      user().error(TAG, 'Ignoring event. Request string ' +
+      this.user().error(TAG, 'Ignoring event. Request string ' +
           'not found: ', trigger['request']);
       return Promise.resolve();
     }
@@ -567,9 +642,13 @@ export class AmpAnalytics extends AMP.BaseElement {
         .then(request => {
           const whiteList =
               this.isSandbox_ ? SANDBOX_AVAILABLE_VARS : undefined;
+          // Since client id expansion is often async, preconnect
+          // to destination before expanding.
+          this.preconnect.url(request,
+              /* We are about to make a real request. */ true);
           // For consistency with amp-pixel we also expand any url
           // replacements.
-          return urlReplacementsForDoc(this.element).expandAsync(
+          return Services.urlReplacementsForDoc(this.element).expandAsync(
               request, undefined, whiteList);
         })
         .then(request => {
@@ -620,7 +699,7 @@ export class AmpAnalytics extends AMP.BaseElement {
     }
     const sampleOn = spec['sampleOn'];
     if (!sampleOn) {
-      user().error(TAG, 'Invalid sampleOn value.');
+      this.user().error(TAG, 'Invalid sampleOn value.');
       return resolve;
     }
     const threshold = parseFloat(spec['threshold']); // Threshold can be NaN.
@@ -686,7 +765,8 @@ export class AmpAnalytics extends AMP.BaseElement {
    */
   expandTemplateWithUrlParams_(spec, expansionOptions) {
     return this.variableService_.expandTemplate(spec, expansionOptions)
-        .then(key => urlReplacementsForDoc(this.element).expandUrlAsync(key));
+        .then(key => Services.urlReplacementsForDoc(
+            this.element).expandUrlAsync(key));
   }
 
   /**
@@ -725,13 +805,18 @@ export class AmpAnalytics extends AMP.BaseElement {
   sendRequest_(request, trigger) {
     if (!request) {
       const TAG = this.getName_();
-      user().error(TAG, 'Request not sent. Contents empty.');
+      this.user().error(TAG, 'Request not sent. Contents empty.');
       return;
     }
     if (trigger['iframePing']) {
       user().assert(trigger['on'] == 'visible',
           'iframePing is only available on page view requests.');
       sendRequestUsingIframe(this.win, request);
+    } else if (this.config_['transport'] &&
+        this.config_['transport']['iframe']) {
+      user().assert(this.iframeTransport_,
+          'iframe transport was inadvertently deleted');
+      this.iframeTransport_.sendRequest(request);
     } else {
       sendRequest(this.win, request, this.config_['transport'] || {});
     }
@@ -809,4 +894,12 @@ export class AmpAnalytics extends AMP.BaseElement {
   }
 }
 
-AMP.registerElement('amp-analytics', AmpAnalytics);
+AMP.extension(TAG, '0.1', AMP => {
+  // Register doc-service factory.
+  AMP.registerServiceForDoc(
+      'amp-analytics-instrumentation', InstrumentationService);
+  AMP.registerServiceForDoc('activity', Activity);
+  installVariableService(AMP.win);
+  // Register the element.
+  AMP.registerElement(TAG, AmpAnalytics);
+});

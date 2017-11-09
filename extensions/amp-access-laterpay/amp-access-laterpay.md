@@ -14,6 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 
+# `amp-access-laterpay`
+
 <table>
   <tr>
     <td class="col-fourty"><strong>Description</strong></td>
@@ -32,12 +34,15 @@ limitations under the License.
       <div>
         <code>&lt;script async custom-element="amp-access-laterpay" src="https://cdn.ampproject.org/v0/amp-access-laterpay-0.1.js">&lt;/script></code>
       </div>
-
     </td>
+  </tr>
+  <tr>
+    <td><strong>Examples</strong></td>
+    <td>See AMP By Example's <a href="https://ampbyexample.com/components/amp-access-laterpay/">annotated amp-access-laterpay</a> example.</td>
   </tr>
 </table>
 
-
+[TOC]
 
 ## Behavior
 
@@ -102,6 +107,11 @@ The following values can be set in the `laterpay` config object:
     <td><code>scrollToTopAfterAuth</code></td>
     <td>boolean</td>
     <td>If true, scrolls the page to the top after the authorization process is successful. This can be helpful if the place where you show the dialog is further below in the page and the user could be confused by their current scroll position after returning to the page.</td>
+  </tr>
+  <tr>
+    <td><code>region</code></td>
+    <td>string</td>
+    <td>Specify if you are on the <code>eu</code> or <code>us</code> <a href="https://connectormwi.laterpay.net/docs/regions-environments-locales.html">LaterPay region</a>.</td>
   </tr>
   <tr>
     <td><code>sandbox</code></td>

@@ -20,8 +20,9 @@ import {
 } from '../../testing/iframe.js';
 import {getStyle} from '../../src/style';
 
-describe.configure().retryOnSaucelabs().run('Old Opacity Boilerplate', () => {
+const timeout = window.ampTestRuntimeConfig.mochaTimeout;
 
+describe.configure().retryOnSaucelabs().run('Old Opacity Boilerplate', () => {
   let fixture;
   beforeEach(() => {
     return createFixtureIframe(
@@ -31,14 +32,14 @@ describe.configure().retryOnSaucelabs().run('Old Opacity Boilerplate', () => {
   });
 
   it('should show the body when opacity boilerplate is used', () => {
-    return expectBodyToBecomeVisible(fixture.win).then(() => {
+    return expectBodyToBecomeVisible(fixture.win, timeout).then(() => {
       expect(getStyle(fixture.win.document.body, 'opacity')).to.equal('1');
     });
   });
 });
 
 
-describe('New Visibility Boilerplate', () => {
+describe.configure().run('New Visibility Boilerplate', () => {
 
   let fixture;
   beforeEach(() => {
@@ -49,7 +50,7 @@ describe('New Visibility Boilerplate', () => {
   });
 
   it('should show the body in boilerplate test', () => {
-    return expectBodyToBecomeVisible(fixture.win).then(() => {
+    return expectBodyToBecomeVisible(fixture.win, timeout).then(() => {
       expect(getStyle(
           fixture.win.document.body, 'visibility')).to.equal('visible');
       // Firefox spells out the values when assigning none.

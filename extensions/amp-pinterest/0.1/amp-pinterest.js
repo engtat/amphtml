@@ -51,7 +51,10 @@ import {PinWidget} from './pin-widget';
  */
 class AmpPinterest extends AMP.BaseElement {
 
-  /** @override */
+  /**
+   * @param {boolean=} onLayout
+   * @override
+   */
   preconnectCallback(onLayout) {
     // preconnect to widget APIpinMedia
     this.preconnect.url('https://widgets.pinterest.com', onLayout);
@@ -84,7 +87,9 @@ class AmpPinterest extends AMP.BaseElement {
     }
     return Promise.reject(user().createError('Invalid selector: ' + selector));
   }
+}
 
-};
 
-AMP.registerElement('amp-pinterest', AmpPinterest, CSS);
+AMP.extension('amp-pinterest', '0.1', AMP => {
+  AMP.registerElement('amp-pinterest', AmpPinterest, CSS);
+});

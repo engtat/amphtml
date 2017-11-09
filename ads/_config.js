@@ -21,6 +21,7 @@
  *   renderStartImplemented: (boolean|undefined),
  *   clientIdScope: (string|undefined),
  *   clientIdCookieName: (string|undefined),
+ *   remoteHTMLDisabled: (boolean|undefined),
  * }}
  */
 let AdNetworkConfigDef;
@@ -54,6 +55,7 @@ let AdNetworkConfigDef;
 export const adConfig = {
   _ping_: {
     renderStartImplemented: true,
+    clientIdScope: '_PING_',
   },
 
   a8: {
@@ -105,6 +107,8 @@ export const adConfig = {
     renderStartImplemented: true,
   },
 
+  adocean: {},
+
   adreactor: {},
 
   adsense: {
@@ -112,6 +116,8 @@ export const adConfig = {
     preconnect: 'https://googleads.g.doubleclick.net',
     clientIdScope: 'AMP_ECID_GOOGLE',
     clientIdCookieName: '_ga',
+    remoteHTMLDisabled: true,
+    masterFrameAccessibleType: 'google_network',
   },
 
   adsnative: {
@@ -241,7 +247,12 @@ export const adConfig = {
     prefetch: 'https://static.clmbtech.com/ad/commons/js/colombia-amp.js',
   },
 
+  connatix: {
+    renderStartImplemented: true,
+  },
+
   contentad: {},
+
 
   criteo: {
     prefetch: 'https://static.criteo.net/js/ld/publishertag.js',
@@ -250,6 +261,19 @@ export const adConfig = {
 
   csa: {
     prefetch: 'https://www.google.com/adsense/search/ads.js',
+  },
+
+  dable: {
+    preconnect: [
+      'https://static.dable.io',
+      'https://api.dable.io',
+      'https://images.dable.io',
+    ],
+    renderStartImplemented: true,
+  },
+
+  directadvert: {
+    renderStartImplemented: true,
   },
 
   distroscale: {
@@ -278,12 +302,15 @@ export const adConfig = {
     clientIdScope: 'AMP_ECID_GOOGLE',
     clientIdCookieName: '_ga',
     renderStartImplemented: true,
+    masterFrameAccessibleType: 'google_network',
   },
 
   eas: {
     prefetch: 'https://amp.emediate.eu/amp.v0.js',
     renderStartImplemented: true,
   },
+
+  engageya: {},
 
   eplanning: {
     prefetch: 'https://us.img.e-planning.net/layers/epl-amp.js',
@@ -404,6 +431,11 @@ export const adConfig = {
     renderStartImplemented: true,
   },
 
+  lockerdome: {
+    prefetch: 'https://cdn2.lockerdomecdn.com/_js/amp.js',
+    renderStartImplemented: true,
+  },
+
   loka: {
     prefetch: 'https://loka-cdn.akamaized.net/scene/amp.js',
     preconnect: [
@@ -483,7 +515,7 @@ export const adConfig = {
 
   mywidget: {
     preconnect: 'https://likemore-fe.go.mail.ru',
-    prefetch: 'https://likemore-go.imgsmail.ru/widget.amp.js',
+    prefetch: 'https://likemore-go.imgsmail.ru/widget_amp.js',
     renderStartImplemented: true,
   },
 
@@ -550,6 +582,8 @@ export const adConfig = {
     renderStartImplemented: true,
   },
 
+  postquare: {},
+
   pubmatic: {
     prefetch: 'https://ads.pubmatic.com/AdServer/js/amp.js',
   },
@@ -587,6 +621,11 @@ export const adConfig = {
     renderStartImplemented: true,
   },
 
+  revjet: {
+    prefetch: 'https://cdn.revjet.com/~cdn/JS/03/amp.js',
+    renderStartImplemented: true,
+  },
+
   rubicon: {},
 
   sharethrough: {
@@ -615,6 +654,15 @@ export const adConfig = {
   smartclip: {
     prefetch: 'https://cdn.smartclip.net/amp/amp.v0.js',
     preconnect: 'https://des.smartclip.net',
+    renderStartImplemented: true,
+  },
+
+  smi2: {
+    renderStartImplemented: true,
+  },
+
+  sogouad: {
+    prefetch: 'https://theta.sogoucdn.com/wap/js/aw.js',
     renderStartImplemented: true,
   },
 
@@ -675,6 +723,15 @@ export const adConfig = {
     renderStartImplemented: true,
   },
 
+  vmfive: {
+    prefetch: 'https://man.vm5apis.com/dist/adn-web-sdk.js',
+    preconnect: [
+      'https://vawpro.vm5apis.com',
+      'https://vahfront.vm5apis.com',
+    ],
+    renderStartImplemented: true,
+  },
+
   webediads: {
     prefetch: 'https://eu1.wbdds.com/amp.min.js',
     preconnect: [
@@ -713,6 +770,10 @@ export const adConfig = {
 
   yandex: {
     prefetch: 'https://yastatic.net/partner-code/loaders/context_amp.js',
+    renderStartImplemented: true,
+  },
+
+  yengo: {
     renderStartImplemented: true,
   },
 

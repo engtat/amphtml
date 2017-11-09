@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-import '../../third_party/babel/custom-babel-helpers';
 import '../../src/polyfills';
 import {dev, initLogConstructor, setReportError} from '../../src/log';
 import {reportError} from '../../src/error';
@@ -106,6 +105,12 @@ const EXPERIMENTS = [
     cleanupIssue: 'https://github.com/ampproject/amphtml/issues/3996',
   },
   {
+    id: 'amp-gwd-animation',
+    name: 'AMP GWD Animation',
+    spec: 'https://github.com/ampproject/amphtml/issues/9949',
+    cleanupIssue: 'https://github.com/ampproject/amphtml/issues/11238',
+  },
+  {
     id: 'no-auth-in-prerender',
     name: 'Delay amp-access auth request until doc becomes visible.',
     spec: '',
@@ -151,12 +156,6 @@ const EXPERIMENTS = [
     spec: 'https://github.com/ampproject/amphtml/issues/4152',
   },
   {
-    id: 'amp-fresh',
-    name: 'Guaranteed minimum freshness on sections of a page',
-    spec: '',
-    cleanupIssue: 'https://github.com/ampproject/amphtml/issues/4715',
-  },
-  {
     id: 'amp-playbuzz',
     name: 'AMP extension for playbuzz items (launched)',
     spec: 'https://github.com/ampproject/amphtml/issues/6106',
@@ -180,8 +179,13 @@ const EXPERIMENTS = [
     cleanupIssue: 'https://github.com/ampproject/amphtml/issues/5535',
   },
   {
+    id: 'font-display-swap',
+    name: 'Use font-display: swap as the default for fonts.',
+    cleanupIssue: 'https://github.com/ampproject/amphtml/issues/11165',
+  },
+  {
     id: 'amp-animation',
-    name: 'High-performing keyframe animations in AMP.',
+    name: 'High-performing keyframe animations in AMP (launched).',
     spec: 'https://github.com/ampproject/amphtml/blob/master/extensions/' +
         'amp-animation/amp-animation.md',
     cleanupIssue: 'https://github.com/ampproject/amphtml/issues/5888',
@@ -204,13 +208,6 @@ const EXPERIMENTS = [
     cleanupIssue: 'https://github.com/ampproject/amphtml/issues/8236',
   },
   {
-    id: 'amp-bind',
-    name: 'AMP extension for dynamic content',
-    cleanupIssue: 'https://github.com/ampproject/amphtml/issues/7156',
-    spec: 'https://github.com/ampproject/amphtml/blob/master/extensions/' +
-        'amp-bind/amp-bind.md',
-  },
-  {
     id: 'web-worker',
     name: 'Web worker for background processing',
     cleanupIssue: 'https://github.com/ampproject/amphtml/issues/7156',
@@ -218,12 +215,6 @@ const EXPERIMENTS = [
   {
     id: 'jank-meter',
     name: 'Display jank meter',
-  },
-  {
-    id: 'sticky-ad-early-load',
-    name: 'Load sticky-ad early after user first scroll' +
-        'Only apply to 1.0 version',
-    cleanupIssue: 'https://github.com/ampproject/amphtml/issues/7479',
   },
   {
     id: 'amp-fx-parallax',
@@ -248,26 +239,6 @@ const EXPERIMENTS = [
     name: 'Use slot width/height attribute for AdSense size format',
   },
   {
-    id: 'dc-use-attr-for-format',
-    name: 'Use slot width/height attribute for DoubleClick size format',
-  },
-  {
-    id: 'ad-loader-v1',
-    name: 'New ad loader version 1',
-    cleanupIssue: 'https://github.com/ampproject/amphtml/issues/8261',
-  },
-  {
-    id: 'ad-loader-v2',
-    name: 'New ad loader version 2',
-    cleanupIssue: 'https://github.com/ampproject/amphtml/issues/8261',
-  },
-  {
-    id: 'amp-form-verifiers',
-    name: 'Asynchronous form verifiers',
-    cleanupIssue: 'https://github.com/ampproject/amphtml/issues/9174',
-    spec: 'https://github.com/ampproject/amphtml/issues/8736',
-  },
-  {
     id: 'input-debounced',
     name: 'A debounced input event for AMP actions',
     cleanupIssue: 'https://github.com/ampproject/amphtml/issues/9413',
@@ -278,12 +249,6 @@ const EXPERIMENTS = [
     name: 'IMA-integrated Video Player',
   },
   {
-    id: 'amp-ad-exit',
-    name: 'Enable amp-ad-exit component',
-    cleanupIssue: 'https://github.com/ampproject/amphtml/issues/9502',
-    spec: 'https://github.com/ampproject/amphtml/blob/master/extensions/amp-ad-exit/amp-ad-exit.md',
-  },
-  {
     id: 'amp-sidebar 1.0',
     name: 'Amp sidebar 1.0 extension',
     cleanupIssue: 'https://github.com/ampproject/amphtml/issues/9803',
@@ -291,11 +256,37 @@ const EXPERIMENTS = [
       'amp-sidebar/1.0/amp-sidebar-1.0.md',
   },
   {
-    id: 'amp-ad-refresh',
-    name: 'Enable AMP ad refresh',
-    spec: 'https://github.com/ampproject/amphtml/blob/master/extensions/' +
-        'amp-ad-network-doubleclick-impl/' +
-        'amp-ad-network-doubleclick-impl-internal.md',
+    id: 'user-error-reporting',
+    name: 'Report error to publishers',
+    spec: 'https://github.com/ampproject/amphtml/issues/6415',
+  },
+  {
+    id: 'disable-rtc',
+    name: 'Disable AMP RTC',
+    spec: 'https://github.com/ampproject/amphtml/issues/8551',
+  },
+  {
+    id: 'inabox-position-api',
+    name: 'Position API for foreign iframe',
+    spec: 'https://github.com/ampproject/amphtml/issues/10995',
+  },
+  {
+    id: 'amp-story',
+    name: 'Visual storytelling in AMP',
+    spec: 'https://github.com/ampproject/amphtml/issues/11329',
+    cleanupIssue: 'https://github.com/ampproject/amphtml/issues/11475',
+  },
+  {
+    id: 'amp-story-desktop',
+    name: 'A responsive desktop experience for the amp-story component',
+    spec: 'https://github.com/ampproject/amphtml/issues/11714',
+    cleanupIssue: 'https://github.com/ampproject/amphtml/issues/11715',
+  },
+  {
+    id: 'amp-story-auto-fullscreen',
+    name: 'Enables full-screen mode on first page transition',
+    spec: 'https://github.com/ampproject/amphtml/issues/11974',
+    cleanupIssue: 'https://github.com/ampproject/amphtml/issues/11975',
   },
 ];
 

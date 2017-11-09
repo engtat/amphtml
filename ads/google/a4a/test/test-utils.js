@@ -18,13 +18,20 @@ import {
   additionalDimensions,
   addCsiSignalsToAmpAnalyticsConfig,
   extractAmpAnalyticsConfig,
-  extractGoogleAdCreativeAndSignature,
   EXPERIMENT_ATTRIBUTE,
   googleAdUrl,
   mergeExperimentIds,
+  maybeAppendErrorParameter,
+  TRUNCATION_PARAM,
+  getEnclosingContainerTypes,
+  ValidAdContainerTypes,
+  getIdentityTokenRequestUrl,
+  getIdentityToken,
 } from '../utils';
+import {buildUrl} from '../url-builder';
 import {createElementWithAttributes} from '../../../../src/dom';
-import {base64UrlDecodeToBytes} from '../../../../src/utils/base64';
+import {Services} from '../../../../src/services';
+import {installXhrService} from '../../../../src/service/xhr-impl';;
 import {
   installExtensionsService,
 } from '../../../../src/service/extensions-impl';
@@ -67,50 +74,6 @@ function noopMethods(impl, doc, sandbox) {
 }
 
 describe('Google A4A utils', () => {
-
-  describe('#extractGoogleAdCreativeAndSignature', () => {
-    it('should return body and signature', () => {
-      const creative = 'some test data';
-      const headerData = {
-        'X-AmpAdSignature': 'AQAB',
-      };
-      const headers = {
-        has: h => { return h in headerData; },
-        get: h => { return headerData[h]; },
-      };
-      return expect(extractGoogleAdCreativeAndSignature(creative, headers))
-          .to.eventually.deep.equal({
-            creative,
-            signature: base64UrlDecodeToBytes('AQAB'),
-          });
-    });
-
-    it('should return body and signature and size', () => {
-      const creative = 'some test data';
-      const headerData = {
-        'X-AmpAdSignature': 'AQAB',
-      };
-      const headers = {
-        has: h => { return h in headerData; },
-        get: h => { return headerData[h]; },
-      };
-      return expect(extractGoogleAdCreativeAndSignature(creative, headers))
-          .to.eventually.deep.equal({
-            creative,
-            signature: base64UrlDecodeToBytes('AQAB'),
-          });
-    });
-
-    it('should return null when no signature header is present', () => {
-      const creative = 'some test data';
-      const headers = {
-        has: unused => { return false; },
-        get: h => { throw new Error('Tried to get ' + h); },
-      };
-      return expect(extractGoogleAdCreativeAndSignature(creative, headers))
-          .to.eventually.deep.equal({creative, signature: null});
-    });
-  });
 
   //TODO: Add tests for other utils functions.
 
@@ -155,16 +118,6 @@ describe('Google A4A utils', () => {
             visiblePercentageMin: 50,
             continuousTimeMin: 1000,
           },
-        },
-        continuousVisibleIniLoad: {
-          on: 'ini-load',
-          selector: 'amp-ad',
-          selectionMethod: 'closest',
-        },
-        continuousVisibleRenderStart: {
-          on: 'render-start',
-          selector: 'amp-ad',
-          selectionMethod: 'closest',
         },
       },
     };
@@ -238,6 +191,10 @@ describe('Google A4A utils', () => {
 
       expect(newConfig.requests.iniLoadCsi).to.not.be.null;
       expect(newConfig.requests.renderStartCsi).to.not.be.null;
+      expect(newConfig.triggers.continuousVisibleIniLoad.request)
+          .to.equal('iniLoadCsi');
+      expect(newConfig.triggers.continuousVisibleRenderStart.request)
+          .to.equal('renderStartCsi');
       const getRegExps = metricName => [
         /^https:\/\/csi\.gstatic\.com\/csi\?/,
         /(\?|&)s=a4a(&|$)/,
@@ -280,34 +237,8 @@ describe('Google A4A utils', () => {
       sandbox = sinon.sandbox.create();
     });
 
-    it('should have the correct ifi numbers', function() {
-      // When ran locally, this test tends to exceed 2000ms timeout.
-      this.timeout(5000);
-      // Reset counter for purpose of this test.
-      delete window['ampAdGoogleIfiCounter'];
-      return createIframePromise().then(fixture => {
-        setupForAdTesting(fixture);
-        const doc = fixture.doc;
-        doc.win = window;
-        const elem = createElementWithAttributes(doc, 'amp-a4a', {
-          'type': 'adsense',
-          'width': '320',
-          'height': '50',
-        });
-        const impl = new MockA4AImpl(elem);
-        noopMethods(impl, doc, sandbox);
-        return fixture.addElement(elem).then(() => {
-          return googleAdUrl(impl, '', 0, [], [], []).then(url1 => {
-            expect(url1).to.match(/ifi=1/);
-            return googleAdUrl(impl, '', 0, [], [], []).then(url2 => {
-              expect(url2).to.match(/ifi=2/);
-              return googleAdUrl(impl, '', 0, [], [], []).then(url3 => {
-                expect(url3).to.match(/ifi=3/);
-              });
-            });
-          });
-        });
-      });
+    afterEach(() => {
+      sandbox.restore();
     });
 
     it('should set ad position', function() {
@@ -345,16 +276,15 @@ describe('Google A4A utils', () => {
         });
         const impl = new MockA4AImpl(elem);
         noopMethods(impl, doc, sandbox);
-        impl.win.AMP_CONFIG = impl.win.AMP_CONFIG || {};
-        impl.win.AMP_CONFIG.canary = true;
+        impl.win.AMP_CONFIG = {type: 'canary'};
         return fixture.addElement(elem).then(() => {
           return googleAdUrl(impl, '', 0, [], []).then(url1 => {
-            expect(url1).to.match(/art=2/);
+            expect(url1).to.match(/[&?]art=2/);
           });
         });
       });
     });
-    it('should not specify that this is canary', () => {
+    it('should specify that this is control', () => {
       return createIframePromise().then(fixture => {
         setupForAdTesting(fixture);
         const doc = fixture.doc;
@@ -366,11 +296,49 @@ describe('Google A4A utils', () => {
         });
         const impl = new MockA4AImpl(elem);
         noopMethods(impl, doc, sandbox);
-        impl.win.AMP_CONFIG = impl.win.AMP_CONFIG || {};
-        impl.win.AMP_CONFIG.canary = false;
+        impl.win.AMP_CONFIG = {type: 'control'};
         return fixture.addElement(elem).then(() => {
           return googleAdUrl(impl, '', 0, [], []).then(url1 => {
-            expect(url1).to.not.match(/art=2/);
+            expect(url1).to.match(/[&?]art=1/);
+          });
+        });
+      });
+    });
+    it('should not have `art` parameter when AMP_CONFIG is undefined', () => {
+      return createIframePromise().then(fixture => {
+        setupForAdTesting(fixture);
+        const doc = fixture.doc;
+        doc.win = window;
+        const elem = createElementWithAttributes(doc, 'amp-a4a', {
+          'type': 'adsense',
+          'width': '320',
+          'height': '50',
+        });
+        const impl = new MockA4AImpl(elem);
+        noopMethods(impl, doc, sandbox);
+        return fixture.addElement(elem).then(() => {
+          return googleAdUrl(impl, '', 0, [], []).then(url1 => {
+            expect(url1).to.not.match(/[&?]art=/);
+          });
+        });
+      });
+    });
+    it('should not have `art` parameter when binary type is production', () => {
+      return createIframePromise().then(fixture => {
+        setupForAdTesting(fixture);
+        const doc = fixture.doc;
+        doc.win = window;
+        const elem = createElementWithAttributes(doc, 'amp-a4a', {
+          'type': 'adsense',
+          'width': '320',
+          'height': '50',
+        });
+        const impl = new MockA4AImpl(elem);
+        noopMethods(impl, doc, sandbox);
+        impl.win.AMP_CONFIG = {type: 'production'};
+        return fixture.addElement(elem).then(() => {
+          return googleAdUrl(impl, '', 0, [], []).then(url1 => {
+            expect(url1).to.not.match(/[&?]art=/);
           });
         });
       });
@@ -398,6 +366,28 @@ describe('Google A4A utils', () => {
         });
       });
     });
+
+    it('should include debug_experiment_id if local mode w/ deid hash', () => {
+      return createIframePromise().then(fixture => {
+        setupForAdTesting(fixture);
+        const doc = fixture.doc;
+        doc.win = fixture.win;
+        const elem = createElementWithAttributes(doc, 'amp-a4a', {
+          'type': 'adsense',
+          'width': '320',
+          'height': '50',
+        });
+        const impl = new MockA4AImpl(elem);
+        noopMethods(impl, doc, sandbox);
+        impl.win.AMP_CONFIG = {type: 'production'};
+        impl.win.location.hash = 'foo,deid=123456,bar';
+        return fixture.addElement(elem).then(() => {
+          return googleAdUrl(impl, '', 0, [], []).then(url1 => {
+            expect(url1).to.match(/[&?]debug_experiment_id=123456/);
+          });
+        });
+      });
+    });
   });
 
   describe('#mergeExperimentIds', () => {
@@ -417,6 +407,190 @@ describe('Google A4A utils', () => {
     });
     it('should return empty string for invalid input', () => {
       expect(mergeExperimentIds(['frob'])).to.equal('');
+    });
+  });
+
+  describe('#maybeAppendErrorParameter', () => {
+    const url = 'https://foo.com/bar?hello=world&one=true';
+    it('should append parameter', () => {
+      expect(maybeAppendErrorParameter(url, 'n')).to.equal(url + '&aet=n');
+    });
+    it('should not append parameter if already present', () => {
+      expect(maybeAppendErrorParameter(url + '&aet=already', 'n')).to.not.be.ok;
+    });
+    it('should not append parameter if truncated', () => {
+      const truncUrl = buildUrl(
+          'https://foo.com/bar', {hello: 'world'}, 15, TRUNCATION_PARAM);
+      expect(truncUrl.indexOf(TRUNCATION_PARAM.name) != -1);
+      expect(maybeAppendErrorParameter(truncUrl, 'n')).to.not.be.ok;
+    });
+  });
+
+  describes.realWin('#getEnclosingContainerTypes', {}, env => {
+    it('should return empty if no containers', () => {
+      expect(getEnclosingContainerTypes(
+          env.win.document.createElement('amp-ad')).length).to.equal(0);
+    });
+
+    Object.keys(ValidAdContainerTypes).forEach(container => {
+      it(`should return container: ${container}`, () => {
+        const containerElem = env.win.document.createElement(container);
+        env.win.document.body.appendChild(containerElem);
+        const ampAdElem = env.win.document.createElement('amp-ad');
+        containerElem.appendChild(ampAdElem);
+        expect(getEnclosingContainerTypes(ampAdElem))
+            .to.deep.equal([ValidAdContainerTypes[container]]);
+      });
+    });
+
+    it('should include ALL containers', () => {
+      let prevContainer;
+      Object.keys(ValidAdContainerTypes).forEach(container => {
+        const containerElem = env.win.document.createElement(container);
+        (prevContainer || env.win.document.body).appendChild(containerElem);
+        prevContainer = containerElem;
+      });
+      const ampAdElem = env.win.document.createElement('amp-ad');
+      prevContainer.appendChild(ampAdElem);
+      expect(getEnclosingContainerTypes(ampAdElem).sort())
+          .to.deep.equal(Object.values(ValidAdContainerTypes).sort());
+    });
+  });
+
+  describes.fakeWin('#getIdentityTokenRequestUrl', {}, () => {
+    let doc;
+    let fakeWin;
+    beforeEach(() => {
+      const documentInfoStub = sandbox.stub(Services, 'documentInfoForDoc');
+      doc = {};
+      fakeWin = {location: {}};
+      documentInfoStub.withArgs(doc)
+          .returns({canonicalUrl: 'http://f.blah.com?some_site'});
+    });
+
+    it('should use google.com if at top', () => {
+      fakeWin.top = fakeWin;
+      fakeWin.location.ancestorOrigins = ['foo.google.com.eu'];
+      expect(getIdentityTokenRequestUrl(fakeWin, doc)).to.equal(
+          'https://adservice.google.com/adsid/integrator.json?' +
+          'domain=f.blah.com');
+    });
+
+    it('should use google.com if no ancestorOrigins', () => {
+      expect(getIdentityTokenRequestUrl(fakeWin, doc)).to.equal(
+          'https://adservice.google.com/adsid/integrator.json?' +
+          'domain=f.blah.com');
+    });
+
+    it('should use google.com if non-google top', () => {
+      fakeWin.location.ancestorOrigins = ['foo.google2.com'];
+      expect(getIdentityTokenRequestUrl(fakeWin, doc)).to.equal(
+          'https://adservice.google.com/adsid/integrator.json?' +
+          'domain=f.blah.com');
+    });
+
+    it('should use google ancestor origin based top domain', () => {
+      fakeWin.location.ancestorOrigins =
+          ['foo.google.eu', 'blah.google.fr'];
+      expect(getIdentityTokenRequestUrl(fakeWin, doc)).to.equal(
+          'https://adservice.google.fr/adsid/integrator.json?' +
+          'domain=f.blah.com');
+    });
+
+    it('should use supplied domain', () => {
+      fakeWin.location.ancestorOrigins = ['foo.google.fr'];
+      expect(getIdentityTokenRequestUrl(fakeWin, doc, '.google.eu')).to.equal(
+          'https://adservice.google.eu/adsid/integrator.json?' +
+          'domain=f.blah.com');
+    });
+  });
+
+  describes.fakeWin('#getIdentityToken', {amp: true, mockFetch: true}, env => {
+    beforeEach(() => {
+      installXhrService(env.win);
+      const documentInfoStub = sandbox.stub(Services, 'documentInfoForDoc');
+      documentInfoStub.withArgs(env.win.document)
+          .returns({canonicalUrl: 'http://f.blah.com?some_site'});
+    });
+
+    afterEach(() => {
+      // Verify fetch mocks are all consumed.
+      expect(env.fetchMock.done()).to.be.true;
+    });
+
+    const getUrl = domain => {
+      domain = domain || 'google\.com';
+      return `https:\/\/adservice\.${domain}\/adsid\/integrator\.json\?` +
+          'domain=f\.blah\.com';
+    };
+
+    it('should fetch minimal token as expected', () => {
+      env.expectFetch(getUrl(), JSON.stringify({newToken: 'abc'}));
+      return getIdentityToken(env.win, env.win.document).then(result => {
+        expect(result.token).to.equal('abc');
+        expect(result.jar).to.equal('');
+        expect(result.pucrd).to.equal('');
+        expect(result.freshLifetimeSecs).to.equal(3600);
+        expect(result.validLifetimeSecs).to.equal(86400);
+        expect(result.fetchTimeMs >= 0).to.be.true;
+      });
+    });
+
+    it('should fetch full token as expected', () => {
+      env.expectFetch(getUrl(), JSON.stringify({
+        newToken: 'abc',
+        '1p_jar': 'some_jar',
+        pucrd: 'some_pucrd',
+        freshLifetimeSecs: '1234',
+        validLifetimeSecs: '5678',
+      }));
+      return getIdentityToken(env.win, env.win.document).then(result => {
+        expect(result.token).to.equal('abc');
+        expect(result.jar).to.equal('some_jar');
+        expect(result.pucrd).to.equal('some_pucrd');
+        expect(result.freshLifetimeSecs).to.equal(1234);
+        expect(result.validLifetimeSecs).to.equal(5678);
+        expect(result.fetchTimeMs >= 0).to.be.true;
+      });
+    });
+
+    it('should redirect as expected', () => {
+      env.expectFetch(getUrl(), JSON.stringify({altDomain: '.google.fr'}));
+      env.expectFetch(getUrl('google\.fr'), JSON.stringify({newToken: 'abc'}));
+      return getIdentityToken(env.win, env.win.document).then(result => {
+        expect(result.token).to.equal('abc');
+        expect(result.jar).to.equal('');
+        expect(result.pucrd).to.equal('');
+        expect(result.freshLifetimeSecs).to.equal(3600);
+        expect(result.validLifetimeSecs).to.equal(86400);
+        expect(result.fetchTimeMs >= 0).to.be.true;
+      });
+    });
+
+    it('should stop after 1 redirect', () => {
+      env.expectFetch(getUrl(), JSON.stringify({altDomain: '.google.fr'}));
+      env.expectFetch(
+          getUrl('google\.fr'), JSON.stringify({altDomain: '.google.com'}));
+      return getIdentityToken(env.win, env.win.document).then(result => {
+        expect(result.token).to.not.be.ok;
+        expect(result.jar).to.not.be.ok;
+        expect(result.pucrd).to.not.be.ok;
+        expect(result.fetchTimeMs >= 0).to.be.true;
+      });
+    });
+
+    it('should use previous execution', () => {
+      const ident = {newToken: 'foo'};
+      env.win['goog_identity_prom'] = Promise.resolve(ident);
+      return getIdentityToken(env.win, env.win.document)
+          .then(result => expect(result).to.jsonEqual(ident));
+    });
+
+    it('should handle fetch error', () => {
+      sandbox.stub(Services, 'xhrFor').returns(
+        {fetchJson: () => Promise.reject('some network failure')});
+      return getIdentityToken(env.win, env.win.document)
+          .then(result => expect(result).to.jsonEqual({}));
     });
   });
 });

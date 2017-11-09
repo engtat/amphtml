@@ -20,7 +20,7 @@ import {
   ampWorkerForTesting,
 } from '../../../src/web-worker/amp-worker';
 import {installXhrService} from '../../../src/service/xhr-impl';
-import {xhrFor} from '../../../src/services';
+import {Services} from '../../../src/services';
 import * as sinon from 'sinon';
 
 describe('invokeWebWorker', () => {
@@ -34,6 +34,9 @@ describe('invokeWebWorker', () => {
 
   beforeEach(() => {
     sandbox = sinon.sandbox.create();
+    sandbox.stub(Services, 'ampdocServiceFor').returns({
+      isSingleDoc: () => false,
+    });
 
     postMessageStub = sandbox.stub();
 
@@ -50,7 +53,7 @@ describe('invokeWebWorker', () => {
 
     // Stub xhr.fetchText() to return a resolved promise.
     installXhrService(fakeWin);
-    sandbox.stub(xhrFor(fakeWin), 'fetchText', () => Promise.resolve({
+    sandbox.stub(Services.xhrFor(fakeWin), 'fetchText', () => Promise.resolve({
       text() {
         return Promise.resolve();
       },

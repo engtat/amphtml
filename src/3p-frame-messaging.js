@@ -47,6 +47,14 @@ export const MessageType = {
   // For amp-inabox
   SEND_POSITIONS: 'send-positions',
   POSITION: 'position',
+
+  // For amp-analytics' iframe-transport
+  SEND_IFRAME_TRANSPORT_EVENTS: 'send-iframe-transport-events',
+  IFRAME_TRANSPORT_EVENTS: 'iframe-transport-events',
+  IFRAME_TRANSPORT_RESPONSE: 'iframe-transport-response',
+
+  // For user-error-in-iframe
+  USER_ERROR_IN_IFRAME: 'user-error-in-iframe',
 };
 
 /**
@@ -54,12 +62,12 @@ export const MessageType = {
  * @param {!EventTarget} element
  * @param {string} eventType
  * @param {function(!Event)} listener
- * @param {boolean=} opt_capture
+ * @param {Object=} opt_evtListenerOpts
  * @return {!UnlistenDef}
  */
-export function listen(element, eventType, listener, opt_capture) {
+export function listen(element, eventType, listener, opt_evtListenerOpts) {
   return internalListenImplementation(
-      element, eventType, listener, opt_capture);
+      element, eventType, listener, opt_evtListenerOpts);
 }
 
 
@@ -114,3 +122,18 @@ export function isAmpMessage(message) {
       message.indexOf(AMP_MESSAGE_PREFIX) == 0 &&
       message.indexOf('{') != -1);
 }
+
+/** @typedef {{creativeId: string, message: string}} */
+export let IframeTransportEvent;
+// An event, and the transport ID of the amp-analytics tags that
+// generated it. For instance if the creative with transport
+// ID 2 sends "hi", then an IframeTransportEvent would look like:
+// { creativeId: "2", message: "hi" }
+// If the creative with transport ID 2 sent that, and also sent "hello",
+// and the creative with transport ID 3 sends "goodbye" then an *array* of 3
+// AmpAnalyticsIframeTransportEvent would be sent to the 3p frame like so:
+// [
+//   { creativeId: "2", message: "hi" }, // An AmpAnalyticsIframeTransportEvent
+//   { creativeId: "2", message: "hello" }, // Another
+//   { creativeId: "3", message: "goodbye" } // And another
+// ]

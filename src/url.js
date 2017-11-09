@@ -20,6 +20,7 @@ import {getMode} from './mode';
 import {urls} from './config';
 import {isArray} from './types';
 import {parseQueryString_} from './url-parse-query-string';
+import {tryDecodeUriComponent_} from './url-try-decode-uri-component';
 
 /**
  * Cached a-tag to avoid memory allocation during URL parsing.
@@ -46,6 +47,15 @@ const INVALID_PROTOCOLS = [
 
 /** @const {string} */
 export const SOURCE_ORIGIN_PARAM = '__amp_source_origin';
+
+/**
+ * Returns the correct origin for a given window.
+ * @param {!Window} win
+ * @return {string} origin
+ */
+export function getWinOrigin(win) {
+  return win.origin || parseUrl(win.location.href).origin;
+}
 
 /**
  * Returns a Location-like object for the given URL. If it is relative,
@@ -476,4 +486,16 @@ export function checkCorsUrl(url) {
   const query = parseQueryString(parsedUrl.search);
   user().assert(!(SOURCE_ORIGIN_PARAM in query),
       'Source origin is not allowed in %s', url);
+}
+
+/**
+ * Tries to decode a URI component, falling back to opt_fallback (or an empty
+ * string)
+ *
+ * @param {string} component
+ * @param {string=} opt_fallback
+ * @return {string}
+ */
+export function tryDecodeUriComponent(component, opt_fallback) {
+  return tryDecodeUriComponent_(component, opt_fallback);
 }

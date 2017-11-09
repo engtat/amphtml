@@ -15,8 +15,7 @@
  */
 
 import {liveListManagerForDoc, LiveListManager} from '../live-list-manager';
-import {viewerForDoc} from '../../../../src/services';
-
+import {Services} from '../../../../src/services';
 
 describes.fakeWin('LiveListManager', {amp: true}, env => {
   const jitterOffset = 1000;
@@ -28,8 +27,10 @@ describes.fakeWin('LiveListManager', {amp: true}, env => {
   let clock;
   let viewer;
   let ready;
+  let sandbox;
 
   beforeEach(() => {
+    sandbox = sinon.sandbox.create();
     win = env.win;
     doc = win.document;
     ampdoc = env.ampdoc;
@@ -37,15 +38,19 @@ describes.fakeWin('LiveListManager', {amp: true}, env => {
     sandbox.stub(LiveListManager.prototype, 'whenDocReady_')
         .returns(docReadyPromise);
     clock = sandbox.useFakeTimers();
-    const mockXhr = sandbox.useFakeXMLHttpRequest().xhr;
+    const mockXhr = sandbox.useFakeXMLHttpRequest();
     requests = [];
     mockXhr.onCreate = function(xhr) {
       requests.push(xhr);
     };
-    viewer = viewerForDoc(ampdoc);
+    viewer = Services.viewerForDoc(ampdoc);
     manager = liveListManagerForDoc(ampdoc);
     liveList = getLiveList({'data-sort-time': '1111'});
     sandbox.stub(liveList, 'getInterval', () => 5000);
+  });
+
+  afterEach(() => {
+    sandbox.restore();
   });
 
   /** @implements {!LiveListInterface} */
