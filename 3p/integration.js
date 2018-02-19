@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Copyright 2015 The AMP HTML Authors. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,14 +22,15 @@
  * https://3p.ampproject.net/$version/f.js
  */
 
-import './polyfills';
+// src/polyfills.js must be the first import.
+import './polyfills'; // eslint-disable-line sort-imports-es6-autofix/sort-imports-es6
+
+import {AmpEvents} from '../src/amp-events';
 import {
   IntegrationAmpContext,
   masterSelection,
 } from './ampcontext-integration';
-import {installEmbedStateListener, manageWin} from './environment';
-import {isExperimentOn} from './3p';
-import {nonSensitiveDataPostMessage, listenParent} from './messaging';
+import {MessageType} from '../src/3p-frame-messaging';
 import {
   computeInMasterFrame,
   nextTick,
@@ -37,6 +38,8 @@ import {
   run,
   setExperimentToggles,
 } from './3p';
+import {dict} from '../src/utils/object.js';
+import {endsWith} from '../src/string';
 import {
   getAmpConfig,
   getAttributeData,
@@ -44,33 +47,39 @@ import {
   getEmbedType,
   getLocation,
 } from './frame-metadata';
-import {urls} from '../src/config';
-import {endsWith} from '../src/string';
-import {parseJson} from '../src/json';
-import {parseUrl, getSourceUrl, isProxyOrigin} from '../src/url';
+import {getMode} from '../src/mode';
+import {getSourceUrl, isProxyOrigin, parseUrl} from '../src/url';
 import {
   initLogConstructor,
+  isUserErrorMessage,
   setReportError,
   user,
-  isUserErrorMessage,
 } from '../src/log';
-import {dict} from '../src/utils/object.js';
-import {getMode} from '../src/mode';
+import {installEmbedStateListener, manageWin} from './environment';
+import {isExperimentOn} from './3p';
+import {listenParent, nonSensitiveDataPostMessage} from './messaging';
+import {parseJson} from '../src/json';
 import {startsWith} from '../src/string.js';
-import {AmpEvents} from '../src/amp-events';
-import {MessageType} from '../src/3p-frame-messaging';
+import {urls} from '../src/config';
+
+// Disable auto-sorting of imports from here on.
+/* eslint-disable sort-imports-es6-autofix/sort-imports-es6 */
 
 // 3P - please keep in alphabetic order
 import {facebook} from './facebook';
 import {github} from './github';
+import {mathml} from './mathml';
 import {reddit} from './reddit';
 import {twitter} from './twitter';
 
-// 3P Ad Networks - please keep in alphabetic order
 import {_ping_} from '../ads/_ping_';
+
+// 3P Ad Networks - please keep in alphabetic order
+import {_24smi} from '../ads/24smi';
 import {a8} from '../ads/a8';
 import {a9} from '../ads/a9';
 import {accesstrade} from '../ads/accesstrade';
+import {adagio} from '../ads/adagio';
 import {adblade, industrybrains} from '../ads/adblade';
 import {adbutler} from '../ads/adbutler';
 import {adform} from '../ads/adform';
@@ -90,12 +99,14 @@ import {adstir} from '../ads/adstir';
 import {adtech} from '../ads/adtech';
 import {adthrive} from '../ads/adthrive';
 import {aduptech} from '../ads/aduptech';
+import {adventive} from '../ads/adventive';
 import {adverline} from '../ads/adverline';
 import {adverticum} from '../ads/adverticum';
 import {advertserve} from '../ads/advertserve';
 import {affiliateb} from '../ads/affiliateb';
 import {amoad} from '../ads/amoad';
 import {appnexus} from '../ads/appnexus';
+import {appvador} from '../ads/appvador';
 import {atomx} from '../ads/atomx';
 import {bidtellect} from '../ads/bidtellect';
 import {brainy} from '../ads/brainy';
@@ -112,12 +123,13 @@ import {csa} from '../ads/google/csa';
 import {dable} from '../ads/dable';
 import {directadvert} from '../ads/directadvert';
 import {distroscale} from '../ads/distroscale';
-import {ezoic} from '../ads/ezoic';
 import {dotandads} from '../ads/dotandads';
 import {doubleclick} from '../ads/google/doubleclick';
+import {eadv} from '../ads/eadv';
 import {eas} from '../ads/eas';
 import {engageya} from '../ads/engageya';
 import {eplanning} from '../ads/eplanning';
+import {ezoic} from '../ads/ezoic';
 import {f1e} from '../ads/f1e';
 import {f1h} from '../ads/f1h';
 import {felmat} from '../ads/felmat';
@@ -125,6 +137,7 @@ import {flite} from '../ads/flite';
 import {fluct} from '../ads/fluct';
 import {fusion} from '../ads/fusion';
 import {genieessp} from '../ads/genieessp';
+import {giraff} from '../ads/giraff';
 import {gmossp} from '../ads/gmossp';
 import {gumgum} from '../ads/gumgum';
 import {holder} from '../ads/holder';
@@ -163,12 +176,13 @@ import {plista} from '../ads/plista';
 import {polymorphicads} from '../ads/polymorphicads';
 import {popin} from '../ads/popin';
 import {postquare} from '../ads/postquare';
+import {pubexchange} from '../ads/pubexchange';
 import {pubmatic} from '../ads/pubmatic';
 import {pubmine} from '../ads/pubmine';
 import {pulsepoint} from '../ads/pulsepoint';
 import {purch} from '../ads/purch';
-import {revcontent} from '../ads/revcontent';
 import {relap} from '../ads/relap';
+import {revcontent} from '../ads/revcontent';
 import {revjet} from '../ads/revjet';
 import {rubicon} from '../ads/rubicon';
 import {sharethrough} from '../ads/sharethrough';
@@ -177,8 +191,8 @@ import {slimcutmedia} from '../ads/slimcutmedia';
 import {smartadserver} from '../ads/smartadserver';
 import {smartclip} from '../ads/smartclip';
 import {smi2} from '../ads/smi2';
-import {sortable} from '../ads/sortable';
 import {sogouad} from '../ads/sogouad';
+import {sortable} from '../ads/sortable';
 import {sovrn} from '../ads/sovrn';
 import {spotx} from '../ads/spotx';
 import {sunmedia} from '../ads/sunmedia';
@@ -187,6 +201,8 @@ import {taboola} from '../ads/taboola';
 import {teads} from '../ads/teads';
 import {triplelift} from '../ads/triplelift';
 import {valuecommerce} from '../ads/valuecommerce';
+import {videonow} from '../ads/videonow';
+import {viralize} from '../ads/viralize';
 import {vmfive} from '../ads/vmfive';
 import {webediads} from '../ads/webediads';
 import {weboramaDisplay} from '../ads/weborama';
@@ -199,6 +215,7 @@ import {yengo} from '../ads/yengo';
 import {yieldbot} from '../ads/yieldbot';
 import {yieldmo} from '../ads/yieldmo';
 import {yieldone} from '../ads/yieldone';
+import {yieldpro} from '../ads/yieldpro';
 import {zedo} from '../ads/zedo';
 import {zergnet} from '../ads/zergnet';
 import {zucks} from '../ads/zucks';
@@ -210,6 +227,7 @@ import {zucks} from '../ads/zucks';
  */
 const AMP_EMBED_ALLOWED = {
   _ping_: true,
+  '24smi': true,
   bringhub: true,
   dable: true,
   engageya: true,
@@ -218,6 +236,7 @@ const AMP_EMBED_ALLOWED = {
   outbrain: true,
   plista: true,
   postquare: true,
+  pubexchange: true,
   smartclip: true,
   smi2: true,
   taboola: true,
@@ -238,9 +257,11 @@ if (getMode().test || getMode().localDev) {
 }
 
 // Keep the list in alphabetic order
+register('24smi', _24smi);
 register('a8', a8);
 register('a9', a9);
 register('accesstrade', accesstrade);
+register('adagio', adagio);
 register('adblade', adblade);
 register('adbutler', adbutler);
 register('adform', adform);
@@ -260,12 +281,14 @@ register('adstir', adstir);
 register('adtech', adtech);
 register('adthrive', adthrive);
 register('aduptech', aduptech);
+register('adventive', adventive);
 register('adverline', adverline);
 register('adverticum', adverticum);
 register('advertserve', advertserve);
 register('affiliateb', affiliateb);
 register('amoad', amoad);
 register('appnexus', appnexus);
+register('appvador', appvador);
 register('atomx', atomx);
 register('bidtellect', bidtellect);
 register('brainy', brainy);
@@ -284,6 +307,7 @@ register('directadvert', directadvert);
 register('distroscale', distroscale);
 register('dotandads', dotandads);
 register('doubleclick', doubleclick);
+register('eadv', eadv);
 register('eas', eas);
 register('engageya', engageya);
 register('eplanning', eplanning);
@@ -296,6 +320,7 @@ register('flite', flite);
 register('fluct', fluct);
 register('fusion', fusion);
 register('genieessp', genieessp);
+register('giraff', giraff);
 register('github', github);
 register('gmossp', gmossp);
 register('gumgum', gumgum);
@@ -318,6 +343,7 @@ register('loka', loka);
 register('mads', mads);
 register('mantis-display', mantisDisplay);
 register('mantis-recommend', mantisRecommend);
+register('mathml', mathml);
 register('mediaimpact', mediaimpact);
 register('medianet', medianet);
 register('mediavine', mediavine);
@@ -337,6 +363,7 @@ register('plista', plista);
 register('polymorphicads', polymorphicads);
 register('popin', popin);
 register('postquare', postquare);
+register('pubexchange', pubexchange);
 register('pubmatic', pubmatic);
 register('pubmine', pubmine);
 register('pulsepoint', pulsepoint);
@@ -352,8 +379,8 @@ register('slimcutmedia', slimcutmedia);
 register('smartadserver', smartadserver);
 register('smartclip', smartclip);
 register('smi2', smi2);
-register('sortable', sortable);
 register('sogouad', sogouad);
+register('sortable', sortable);
 register('sovrn', sovrn);
 register('spotx', spotx);
 register('sunmedia', sunmedia);
@@ -363,6 +390,8 @@ register('teads', teads);
 register('triplelift', triplelift);
 register('twitter', twitter);
 register('valuecommerce', valuecommerce);
+register('videonow', videonow);
+register('viralize', viralize);
 register('vmfive', vmfive);
 register('webediads', webediads);
 register('weborama-display', weboramaDisplay);
@@ -374,9 +403,10 @@ register('yandex', yandex);
 register('yengo', yengo);
 register('yieldbot', yieldbot);
 register('yieldmo', yieldmo);
-register('zergnet', zergnet);
 register('yieldone', yieldone);
+register('yieldpro', yieldpro);
 register('zedo', zedo);
+register('zergnet', zergnet);
 register('zucks', zucks);
 
 // For backward compat, we always allow these types without the iframe
@@ -436,7 +466,7 @@ export function draw3p(win, data, configCallback) {
   } else {
     run(type, win, data);
   }
-};
+}
 
 /**
  * @return {boolean} Whether this is the master iframe.
@@ -458,7 +488,7 @@ function isMaster() {
  *     that are allowed to embed this frame.
  */
 window.draw3p = function(opt_configCallback, opt_allowed3pTypes,
-    opt_allowedEmbeddingOrigins) {
+  opt_allowedEmbeddingOrigins) {
   try {
     const data = getAttributeData();
     const location = getLocation();
@@ -647,13 +677,13 @@ function triggerRenderStart(opt_data) {
 
 /**
  * Id for getHtml postMessage.
- * @type {!number}
+ * @type {number}
  */
 let currentMessageId = 0;
 
 /**
  * See readme for window.context.getHtml
- * @param {!string} selector - CSS selector of the node to take content from
+ * @param {string} selector - CSS selector of the node to take content from
  * @param {!Array<string>} attributes - tag attributes to be left in the stringified HTML
  * @param {!Function} callback
  */
@@ -680,7 +710,7 @@ function getHtml(selector, attributes, callback) {
  * the IntersectionObserver spec callback.
  * http://rawgit.com/slightlyoff/IntersectionObserver/master/index.html#callbackdef-intersectionobservercallback
  * @param {function(!Array<IntersectionObserverEntry>)} observerCallback
- * @returns {!function()} A function which removes the event listener that
+ * @returns {function()} A function which removes the event listener that
  *    observes for intersection messages.
  */
 function observeIntersection(observerCallback) {
@@ -714,7 +744,7 @@ function dispatchVisibilityChangeEvent(win, isHidden) {
 /**
  * Registers a callback for communicating when a resize request succeeds.
  * @param {function(number, number)} observerCallback
- * @returns {!function()} A function which removes the event listener that
+ * @returns {function()} A function which removes the event listener that
  *    observes for resize status messages.
  */
 function onResizeSuccess(observerCallback) {
@@ -726,7 +756,7 @@ function onResizeSuccess(observerCallback) {
 /**
  * Registers a callback for communicating when a resize request is denied.
  * @param {function(number, number)} observerCallback
- * @returns {!function()} A function which removes the event listener that
+ * @returns {function()} A function which removes the event listener that
  *    observes for resize status messages.
  */
 function onResizeDenied(observerCallback) {

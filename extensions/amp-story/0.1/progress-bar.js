@@ -13,10 +13,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import {dev} from '../../../src/log';
-import {scale, setImportantStyles} from '../../../src/style';
-import {scopedQuerySelector} from '../../../src/dom';
+import {POLL_INTERVAL_MS} from './page-advancement';
 import {Services} from '../../../src/services';
+import {dev} from '../../../src/log';
+import {escapeCssSelectorNth, scopedQuerySelector} from '../../../src/dom';
+import {scale, setImportantStyles} from '../../../src/style';
+
+
+/**
+ * Transition used to show the progress of a media. Has to be linear so the
+ * animation is smooth and constant.
+ * @const {string}
+ */
+const TRANSITION_LINEAR = `transform ${POLL_INTERVAL_MS}ms linear`;
+
+/**
+ * Transition used to fully fill or unfill a progress bar item.
+ * @const {string}
+ */
+const TRANSITION_EASE = 'transform 200ms ease';
 
 
 /**
@@ -37,10 +52,10 @@ export class ProgressBar {
     this.root_ = null;
 
     /** @private {number} */
-    this.activePageIndex_ = -1;
+    this.pageCount_ = 0;
 
     /** @private {number} */
-    this.pageCount_ = 0;
+    this.activePageIndex_ = 0;
 
     /** @private @const {!../../../src/service/vsync-impl.Vsync} */
     this.vsync_ = Services.vsyncFor(this.win_);
@@ -110,13 +125,12 @@ export class ProgressBar {
     this.assertValidPageIndex_(pageIndex);
     for (let i = 0; i < this.pageCount_; i++) {
       if (i < pageIndex) {
-        this.updateProgress(i, 1.0);
-      } else if (i > pageIndex) {
-        this.updateProgress(i, 0.0);
+        this.updateProgress(i, 1.0, /* withTransition */ i == pageIndex - 1);
       } else {
         // The active page manages its own progress by firing PAGE_PROGRESS
         // events to amp-story.
-        this.updateProgress(i, 0.0);
+        this.updateProgress(i, 0.0, /* withTransition */ (
+          pageIndex != 0 && this.activePageIndex_ != 1));
       }
     }
   }
@@ -126,19 +140,32 @@ export class ProgressBar {
    *     changed.
    * @param {number} progress A number from 0.0 to 1.0, representing the
    *     progress of the current page.
+   * @param {boolean=} withTransition
    * @public
    */
-  updateProgress(pageIndex, progress) {
+  updateProgress(pageIndex, progress, withTransition = true) {
     this.assertValidPageIndex_(pageIndex);
+
+    this.activePageIndex_ = pageIndex;
+
     // Offset the index by 1, since nth-child indices start at 1 while
     // JavaScript indices start at 0.
     const nthChildIndex = pageIndex + 1;
     const progressEl = scopedQuerySelector(this.getRoot(),
-        `.i-amphtml-story-page-progress-bar:nth-child(${nthChildIndex}) ` +
-        '.i-amphtml-story-page-progress-value');
+        `.i-amphtml-story-page-progress-bar:nth-child(${
+          escapeCssSelectorNth(nthChildIndex)
+        }) .i-amphtml-story-page-progress-value`);
     this.vsync_.mutate(() => {
+      let transition = 'none';
+      if (withTransition) {
+        // Using an eased transition only if filling the bar to 0 or 1.
+        transition =
+            (progress === 1 || progress === 0) ?
+              TRANSITION_EASE : TRANSITION_LINEAR;
+      }
       setImportantStyles(dev().assertElement(progressEl), {
         'transform': scale(`${progress},1`),
+        'transition': transition,
       });
     });
   }

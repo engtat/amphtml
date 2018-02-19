@@ -158,6 +158,52 @@ event.value</pre>
     <td>Elements that fire <code>input</code> event.</td>
     <td>Same as <code>change</code> event data.</td>
   </tr>
+    <!-- input-throttled -->
+  <tr>
+    <td><code>input-throttled</code></td>
+    <td>Fired when the value of the element is changed. This is similar to the standard <code>change</code> event, but it is throttled to firing at most once every 100ms while the value of the input is changing.</td>
+    <td>Elements that fire <code>input</code> event.</td>
+    <td>Same as <code>change</code> event data.</td>
+  </tr>
+</table>
+
+### amp-carousel[type="slides"]
+<table>
+  <tr>
+    <th width="25%">Event</th>
+    <th width="35%">Description</th>
+    <th width="40%">Data</th>
+  </tr>
+  <tr>
+    <td><code>slideChange</code></td>
+    <td>Fired when the user manually changes the carousel's current slide. Does not fire on autoplay or the <code>goToSlide</code> action.</td>
+    <td><pre>// Slide number.
+event.index</pre></td>
+  </tr>
+  <tr>
+    <td><code>toggleAutoplay</code></td>
+    <td>Will, on user tap or click, toggle the autoplay status for the carousel. You can either specify the status you want by specifying it: <code>carousel-id.toggleAutoplay(toggleOn=false)</code> or flip the status by not specifying a value.</td>
+    <td><pre>optional toggle status</pre></td>
+  </tr>
+</table>
+
+### amp-sidebar
+<table>
+  <tr>
+    <th width="25%">Event</th>
+    <th width="35%">Description</th>
+    <th width="40%">Data</th>
+  </tr>
+  <tr>
+    <td><code>sidebarOpen</code></td>
+    <td>Fired when sidebar is fully opened after transition has ended.</td>
+    <td>None</td>
+  </tr>
+  <tr>
+    <td><code>sidebarClose</code></td>
+    <td>Fired when sidebar is fully closed after transition has ended.</td>
+    <td>None</td>
+  </tr>
 </table>
 
 ### amp-carousel[type="slides"]
@@ -175,7 +221,7 @@ event.index</pre></td>
   </tr>
 </table>
 
-### amp-selector
+### amp-video, amp-youtube
 <table>
   <tr>
     <th width="25%">Event</th>
@@ -183,12 +229,9 @@ event.index</pre></td>
     <th width="40%">Data</th>
   </tr>
   <tr>
-    <td><code>select</code></td>
-    <td>Fired when the user manually selects an option.</td>
-    <td><pre>// The option attribute
-// value of
-// the selected element.
-event.targetOption</pre></td>
+    <td><code>timeUpdate</code>(low-trust)</td>
+    <td>Fired when the playing position of a video has changed. Frequency of the event is controlled by AMP and is currently set at 1 second intervals. This event is low-trust which means it can not trigger most actions; only low-trust actions such as <code>amp-animation</code> actions can be run.</td>
+    <td><code>{time, percent}</code><code>time</code> indicates the current time in seconds, <code>percent</code> is a number between 0 and 1 and indicates current position as percentage of total time.</td>
   </tr>
 </table>
 

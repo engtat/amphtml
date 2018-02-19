@@ -13,25 +13,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import {
-  EXPERIMENT,
-  GWD_PAGEDECK_ID,
-  TAG,
-  addAction,
-} from '../amp-gwd-animation';
+import * as sinon from 'sinon';
 import {
   ANIMATIONS_DISABLED_CLASS,
+  AmpGwdRuntimeService,
   CURRENT_LABEL_ANIMATION_ATTR,
   GWD_PAGE_WRAPPER_CLASS,
   GWD_SERVICE_NAME,
   PlaybackCssClass,
-  AmpGwdRuntimeService,
 } from '../amp-gwd-animation-impl';
-import {toggleExperiment} from '../../../../src/experiments';
-import {getServiceForDoc} from '../../../../src/service';
 import {AmpDocSingle} from '../../../../src/service/ampdoc-impl';
+import {
+  GWD_PAGEDECK_ID,
+  TAG,
+  addAction,
+} from '../amp-gwd-animation';
 import {Services} from '../../../../src/services';
-import * as sinon from 'sinon';
+import {getServiceForDoc} from '../../../../src/service';
 
 describes.sandboxed('AMP GWD Animation', {}, () => {
   /**
@@ -99,9 +97,6 @@ describes.sandboxed('AMP GWD Animation', {}, () => {
       });
 
       beforeEach(() => {
-        // TODO(sklobovskaya): Remove experiment guard.
-        toggleExperiment(env.win, EXPERIMENT, true);
-
         ampdoc = env.ampdoc;
 
         ampdoc.getBody().innerHTML =
@@ -384,7 +379,7 @@ describes.sandboxed('AMP GWD Animation', {}, () => {
           const invocationFromEvent2 = {
             method: 'gotoAndPlayNTimes',
             args: {id: 'page1', label: 'foo', N: 1},
-            event: {eventName: 'event-2'},  // Different event.
+            event: {eventName: 'event-2'}, // Different event.
             satisfiesTrust: () => true,
           };
 
@@ -406,7 +401,7 @@ describes.sandboxed('AMP GWD Animation', {}, () => {
       it('should trigger timeline events', () => {
         const triggeredAmpEventNames = [];
         const triggeredEvents = [];
-        sandbox.stub(Services.actionServiceForDoc(ampdoc), 'trigger',
+        sandbox.stub(Services.actionServiceForDoc(ampdoc), 'trigger').callsFake(
             (target, name, event) => {
               triggeredAmpEventNames.push(name);
               triggeredEvents.push(event);

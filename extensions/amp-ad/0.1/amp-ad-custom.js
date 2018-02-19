@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-import {isLayoutSizeDefined} from '../../../src/layout';
-import {user} from '../../../src/log';
+import {AmpAdUIHandler} from './amp-ad-ui';
 import {Services} from '../../../src/services';
 import {addParamToUrl} from '../../../src/url';
 import {ancestorElementsByTag} from '../../../src/dom';
+import {isLayoutSizeDefined} from '../../../src/layout';
 import {removeChildren} from '../../../src/dom';
-import {AmpAdUIHandler} from './amp-ad-ui';
+import {user} from '../../../src/log';
 
-/** @const {!string} Tag name for custom ad implementation. */
+/** @const {string} Tag name for custom ad implementation. */
 export const TAG_AD_CUSTOM = 'amp-ad-custom';
 
 /** @var {Object} A map of promises for each value of data-url. The promise
@@ -53,8 +53,10 @@ export class AmpAdCustom extends AMP.BaseElement {
 
   /** @override */
   getPriority() {
-    // Loads ads after other content.
-    return 2;
+    // Loads ads after other content
+    const isPWA = !this.element.getAmpDoc().isSingleDoc();
+    // give the ad higher priority if it is inside a PWA
+    return isPWA ? 1 : 2;
   }
 
   /** @override **/
@@ -67,10 +69,7 @@ export class AmpAdCustom extends AMP.BaseElement {
   buildCallback() {
     this.url_ = this.element.getAttribute('data-url');
     this.slot_ = this.element.getAttribute('data-slot');
-    // Ensure that there are templates in this ad
-    const templates = this.element.querySelectorAll('template');
-    user().assert(templates.length > 0, 'Missing template in custom ad');
-    // And ensure that the slot value is legal
+    // Ensure that the slot value is legal
     user().assert(this.slot_ === null || this.slot_.match(/^[0-9a-z]+$/),
         'custom ad slot should be alphanumeric: ' + this.slot_);
 
@@ -93,7 +92,7 @@ export class AmpAdCustom extends AMP.BaseElement {
       let templateData = data;
       if (this.slot_ !== null) {
         templateData = data.hasOwnProperty(this.slot_) ? data[this.slot_] :
-            null;
+          null;
       }
       // Set UI state
       if (templateData !== null && typeof templateData == 'object') {

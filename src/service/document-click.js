@@ -14,21 +14,30 @@
  * limitations under the License.
  */
 
+import {Services} from '../services';
 import {
   closestByTag,
-  openWindowDialog,
   escapeCssSelectorIdent,
   isIframed,
+  openWindowDialog,
 } from '../dom';
+import {dev, user} from '../log';
 import {
-  registerServiceBuilderForDoc,
-  installServiceInEmbedScope,
-} from '../service';
-import {dev} from '../log';
+  getExtraParamsUrl,
+  shouldAppendExtraParams,
+} from '../impression';
 import {getMode} from '../mode';
-import {Services} from '../services';
-import {parseUrl, parseUrlWithA} from '../url';
+import {
+  installServiceInEmbedScope,
+  registerServiceBuilderForDoc,
+} from '../service';
+import {
+  isProtocolValid,
+  parseUrl,
+  parseUrlWithA,
+} from '../url';
 import {toWin} from '../types';
+
 
 const TAG = 'clickhandler';
 
@@ -46,7 +55,7 @@ export function installGlobalClickListenerForDoc(ampdoc) {
       /* opt_instantiate */ true);
 }
 
-
+// TODO(willchou): Rename to navigation.js#Navigation.
 /**
  * Intercept any click on the current document and prevent any
  * linking to an identifier from pushing into the history stack.
@@ -97,6 +106,18 @@ export class ClickHandler {
     /** @private @const {!function(!Event)|undefined} */
     this.boundHandle_ = this.handle_.bind(this);
     this.rootNode_.addEventListener('click', this.boundHandle_);
+
+    /** @private {boolean} */
+    this.appendExtraParams_ = false;
+    shouldAppendExtraParams(this.ampdoc).then(res => {
+      this.appendExtraParams_ = res;
+    });
+
+    /**
+     * Lazy-generated list of A2A-enabled navigation features.
+     * @private {?Array<string>}
+     */
+    this.a2aFeatures_ = null;
   }
 
   /** @override */
@@ -112,6 +133,52 @@ export class ClickHandler {
     if (this.boundHandle_) {
       this.rootNode_.removeEventListener('click', this.boundHandle_);
     }
+  }
+
+  /**
+   * Navigates a window to a URL.
+   *
+   * If opt_requestedBy matches a feature name in a <meta> tag with attribute
+   * name="amp-to-amp-navigation", then treats the URL as an AMP URL (A2A).
+   *
+   * @param {!Window} win
+   * @param {string} url
+   * @param {string=} opt_requestedBy
+   */
+  navigateTo(win, url, opt_requestedBy) {
+    if (!isProtocolValid(url)) {
+      user().error(TAG, 'Cannot navigate to invalid protocol: ' + url);
+      return;
+    }
+
+    // If this redirect was requested by a feature that opted into A2A,
+    // try to ask the viewer to navigate this AMP URL.
+    if (opt_requestedBy) {
+      if (!this.a2aFeatures_) {
+        this.a2aFeatures_ = this.queryA2AFeatures_();
+      }
+      if (this.a2aFeatures_.includes(opt_requestedBy)) {
+        if (this.viewer_.navigateToAmpUrl(url, opt_requestedBy)) {
+          return;
+        }
+      }
+    }
+
+    // Otherwise, perform normal behavior of navigating the top frame.
+    win.top.location.href = url;
+  }
+
+  /**
+   * @return {!Array<string>}
+   * @private
+   */
+  queryA2AFeatures_() {
+    const meta = this.rootNode_.querySelector(
+        'meta[name="amp-to-amp-navigation"]');
+    if (meta && meta.hasAttribute('content')) {
+      return meta.getAttribute('content').split(',').map(s => s.trim());
+    }
+    return [];
   }
 
   /**
@@ -133,51 +200,102 @@ export class ClickHandler {
     if (!target || !target.href) {
       return;
     }
-    Services.urlReplacementsForDoc(target).maybeExpandLink(target);
 
-    const tgtLoc = this.parseUrl_(target.href);
-
-    // Handle custom protocols only if the document is iframed.
-    if (this.isIframed_) {
-      this.handleCustomProtocolClick_(e, target, tgtLoc);
+    // First check if need to handle external link decoration.
+    let defaultExpandParamsUrl = null;
+    if (this.appendExtraParams_ && !this.isEmbed_) {
+      // Only decorate outgoing link when needed to and is not in FIE.
+      defaultExpandParamsUrl = getExtraParamsUrl(this.ampdoc.win, target);
     }
 
-    // Handle navigation clicks.
-    if (!e.defaultPrevented) {
-      this.handleNavClick_(e, target, tgtLoc);
+    const urlReplacements = Services.urlReplacementsForDoc(target);
+    urlReplacements.maybeExpandLink(target, defaultExpandParamsUrl);
+
+    const location = this.parseUrl_(target.href);
+
+    // Handle AMP-to-AMP navigation if rel=amphtml.
+    if (this.handleA2AClick_(e, target, location)) {
+      return;
     }
+
+    // Handle navigating to custom protocol if applicable.
+    if (this.handleCustomProtocolClick_(e, target, location)) {
+      return;
+    }
+
+    // Finally, handle normal click-navigation behavior.
+    this.handleNavClick_(e, target, location);
   }
 
   /**
    * Handles clicking on a custom protocol link.
+   * Returns true if the navigation was handled. Otherwise, returns false.
    * @param {!Event} e
    * @param {!Element} target
-   * @param {!Location} tgtLoc
+   * @param {!Location} location
+   * @return {boolean}
    * @private
    */
-  handleCustomProtocolClick_(e, target, tgtLoc) {
+  handleCustomProtocolClick_(e, target, location) {
+    // Handle custom protocols only if the document is iframed.
+    if (!this.isIframed_) {
+      return false;
+    }
+
     /** @const {!Window} */
     const win = toWin(target.ownerDocument.defaultView);
+    const url = target.href;
+    const protocol = location.protocol;
+
     // On Safari iOS, custom protocol links will fail to open apps when the
     // document is iframed - in order to go around this, we set the top.location
     // to the custom protocol href.
-    const isFTP = tgtLoc.protocol == 'ftp:';
+    const isFTP = protocol == 'ftp:';
 
     // In case of FTP Links in embedded documents always open then in _blank.
     if (isFTP) {
-      openWindowDialog(win, target.href, '_blank');
+      openWindowDialog(win, url, '_blank');
       e.preventDefault();
-      return;
+      return true;
     }
 
-    const isNormalProtocol = /^(https?|mailto):$/.test(tgtLoc.protocol);
+    const isNormalProtocol = /^(https?|mailto):$/.test(protocol);
     if (this.isIosSafari_ && !isNormalProtocol) {
-      openWindowDialog(win, target.href, '_top');
+      openWindowDialog(win, url, '_top');
       // Without preventing default the page would should an alert error twice
       // in the case where there's no app to handle the custom protocol.
       e.preventDefault();
+      return true;
     }
+
+    return false;
   }
+
+  /**
+   * Handles clicking on an AMP link.
+   * Returns true if the navigation was handled. Otherwise, returns false.
+   * @param {!Event} e
+   * @param {!Element} target
+   * @param {!Location} location
+   * @return {boolean}
+   * @private
+   */
+  handleA2AClick_(e, target, location) {
+    if (!target.hasAttribute('rel')) {
+      return false;
+    }
+    const relations = target.getAttribute('rel').split(' ').map(s => s.trim());
+    if (!relations.includes('amphtml')) {
+      return false;
+    }
+    // The viewer may not support the capability for navigating AMP links.
+    if (this.viewer_.navigateToAmpUrl(location.href, '<a rel=amphtml>')) {
+      e.preventDefault();
+      return true;
+    }
+    return false;
+  }
+
 
   /**
    * Handles clicking on a link with hash navigation.
@@ -187,8 +305,6 @@ export class ClickHandler {
    * @private
    */
   handleNavClick_(e, target, tgtLoc) {
-    /** @const {!Window} */
-    const win = e.target.ownerDocument.defaultView;
     /** @const {!Location} */
     const curLoc = this.parseUrl_('');
     const tgtHref = `${tgtLoc.origin}${tgtLoc.pathname}${tgtLoc.search}`;
@@ -224,7 +340,7 @@ export class ClickHandler {
     const hash = tgtLoc.hash.slice(1);
     let elem = null;
     if (hash) {
-      const escapedHash = escapeCssSelectorIdent(win, hash);
+      const escapedHash = escapeCssSelectorIdent(hash);
       elem = (this.rootNode_.getElementById(hash) ||
           // Fallback to anchor[name] if element with id is not found.
           // Linking to an anchor element with name is obsolete in html5.
@@ -263,7 +379,7 @@ export class ClickHandler {
       // See https://github.com/ampproject/amphtml/issues/5334 for more details.
       this.viewport_./*OK*/scrollIntoView(elem);
       Services.timerFor(this.ampdoc.win).delay(() =>
-          this.viewport_./*OK*/scrollIntoView(dev().assertElement(elem)), 1);
+        this.viewport_./*OK*/scrollIntoView(dev().assertElement(elem)), 1);
     } else {
       dev().warn(TAG,
           `failed to find element with id=${hash} or a[name=${hash}]`);
